@@ -16,8 +16,16 @@ android {
         versionCode = 1
         versionName = "0.1"
 
-        // Galaxy S25 only — arm64 keeps the build fast and the APK small.
-        ndk { abiFilters += "arm64-v8a" }
+        // Galaxy S25 only by default — arm64 keeps the build fast and the APK small.
+        // Override for an emulator run: ./gradlew installDebug -Pabis=x86_64
+        // The default must stay arm64-only so a benchmark build can never
+        // silently be taken from a non-target architecture.
+        val abis = (project.findProperty("abis") as String?)
+            ?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
+            ?: listOf("arm64-v8a")
+        ndk { abiFilters += abis }
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -65,4 +73,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }

@@ -33,13 +33,22 @@ FetchContent_MakeAvailable(ggml)
 # Snapdragon 8 Elite is armv8.2+ and has native fp16 arithmetic. Compiling for it
 # (rather than baseline armv8-a) is worth a large fraction of the inference speed,
 # so the spike must measure with it on.
-set(ENGLUS_ARCH_FLAGS -march=armv8.2-a+fp16)
-target_compile_options(ggml PRIVATE ${ENGLUS_ARCH_FLAGS})
-if (TARGET ggml-cpu)
-    target_compile_options(ggml-cpu PRIVATE ${ENGLUS_ARCH_FLAGS})
+#
+# x86_64 exists only so the pipeline can be exercised on an emulator; -march is
+# arm-specific and would fail to compile there. Emulator timings are meaningless
+# for this spike anyway -- they measure the host PC, not the phone.
+if (ANDROID_ABI STREQUAL "arm64-v8a")
+    set(ENGLUS_ARCH_FLAGS -march=armv8.2-a+fp16)
+else ()
+    set(ENGLUS_ARCH_FLAGS "")
 endif ()
-if (TARGET ggml-base)
-    target_compile_options(ggml-base PRIVATE ${ENGLUS_ARCH_FLAGS})
+
+if (ENGLUS_ARCH_FLAGS)
+    foreach (ggml_target ggml ggml-cpu ggml-base)
+        if (TARGET ${ggml_target})
+            target_compile_options(${ggml_target} PRIVATE ${ENGLUS_ARCH_FLAGS})
+        endif ()
+    endforeach ()
 endif ()
 
 add_library(englus_whisper SHARED
@@ -49,7 +58,9 @@ add_library(englus_whisper SHARED
 
 target_compile_definitions(englus_whisper PUBLIC GGML_USE_CPU)
 target_compile_definitions(englus_whisper PRIVATE WHISPER_VERSION="${WHISPER_VERSION}")
-target_compile_options(englus_whisper PRIVATE ${ENGLUS_ARCH_FLAGS})
+if (ENGLUS_ARCH_FLAGS)
+    target_compile_options(englus_whisper PRIVATE ${ENGLUS_ARCH_FLAGS})
+endif ()
 
 target_include_directories(englus_whisper PRIVATE
     ${WHISPER_LIB_DIR}
