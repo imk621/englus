@@ -1,0 +1,4 @@
+# Pinned whisper.cpp commit (v1.9.2, 2026-08-18).
+# Bump deliberately, never incidentally: an upstream change to token timestamps
+# or the ggml CPU backend invalidates every benchmark number already recorded.
+4834a2327d008ace3ec5a9ed00f51454bcabbc1c
