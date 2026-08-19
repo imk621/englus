@@ -25,6 +25,9 @@ android {
             isMinifyEnabled = false
             // Native perf numbers are meaningless in a debug build; benchmark this variant.
             isDebuggable = false
+            // Signed with the debug key so `installRelease` works on a personal
+            // device without a keystore. This app is never distributed.
+            signingConfig = signingConfigs.getByName("debug")
         }
         debug {
             isDebuggable = true
