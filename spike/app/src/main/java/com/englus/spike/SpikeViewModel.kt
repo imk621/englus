@@ -96,9 +96,20 @@ class SpikeViewModel(app: Application) : AndroidViewModel(app) {
         refreshModels()
     }
 
+    /**
+     * Scans `files/models/` and `files/` itself.
+     *
+     * The second location is not redundant: a directory created by
+     * `adb shell mkdir` is owned by shell (uid 2000, mode 770) and the app gets
+     * EACCES listing it even though it sits inside the app's own external dir.
+     * Dropping the .bin straight into `files/` always works, so accept it there.
+     */
     fun refreshModels() {
-        val found = modelsDir.listFiles { f -> f.isFile && f.name.endsWith(".bin") }
-            ?.sortedBy { it.name }.orEmpty()
+        val roots = listOfNotNull(modelsDir, getApplication<Application>().getExternalFilesDir(null))
+        val found = roots
+            .flatMap { dir -> dir.listFiles { f -> f.isFile && f.name.endsWith(".bin") }?.toList().orEmpty() }
+            .distinctBy { it.name }
+            .sortedBy { it.name }
         _state.update { it.copy(models = found, selectedModel = it.selectedModel ?: found.firstOrNull()) }
     }
 

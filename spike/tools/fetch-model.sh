@@ -9,6 +9,10 @@
 # Which side of that trade the app lands on is the decision this spike exists for.
 set -euo pipefail
 
+# Git Bash rewrites /sdcard/... into a Windows path before adb sees it, which
+# makes every push land in C:/Program Files/Git/sdcard. Harmless elsewhere.
+export MSYS_NO_PATHCONV=1
+
 MODEL="${1:-base.en}"
 PKG="com.englus.spike"
 REMOTE_DIR="/sdcard/Android/data/$PKG/files/models"
@@ -25,7 +29,6 @@ else
   echo "already downloaded: $LOCAL"
 fi
 
-echo "pushing to $REMOTE_DIR"
-adb shell mkdir -p "$REMOTE_DIR"
-adb push "$LOCAL" "$REMOTE_DIR/"
+. "$(dirname "$0")/push-model.sh"
+push_model "$LOCAL"
 echo "done. Tap '모델 목록 새로고침' in the app."
