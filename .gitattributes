@@ -1,0 +1,9 @@
+* text=auto eol=lf
+
+# Windows-native entry points must keep CRLF or cmd.exe mis-parses them.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.jar binary
+*.bin binary
+*.png binary
