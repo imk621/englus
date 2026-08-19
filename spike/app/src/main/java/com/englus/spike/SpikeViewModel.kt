@@ -73,6 +73,9 @@ data class UiState(
     val systemInfo: String = "",
 )
 
+/** First 4 bytes of a ggml file: GGML_FILE_MAGIC 0x67676d6c, little-endian. */
+private val GGML_MAGIC = byteArrayOf(0x6c, 0x6d, 0x67, 0x67)
+
 class SpikeViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _state = MutableStateFlow(UiState())
@@ -114,6 +117,61 @@ class SpikeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectModel(f: File) = _state.update { it.copy(selectedModel = f, result = null) }
+
+    /**
+     * Copies a .bin the user picked (typically from Downloads) into the app's
+     * models directory.
+     *
+     * Without this the only way to install a model is `adb push`, because
+     * Android 11+ blocks file managers from writing into Android/data/<pkg>.
+     * Sideloading the APK is useless if the model cannot follow it.
+     */
+    fun importModel(uri: Uri) {
+        viewModelScope.launch {
+            val name = queryDisplayName(uri).ifEmpty { "model.bin" }
+            if (!name.endsWith(".bin")) {
+                return@launch fail("whisper 모델은 .bin 파일이어야 합니다: $name")
+            }
+
+            _state.update { it.copy(running = true, stage = "모델 복사 중… ($name)", progress = 0f, error = null) }
+            val dest = File(modelsDir, name)
+            try {
+                withContext(Dispatchers.IO) {
+                    modelsDir.mkdirs()
+                    val total = querySize(uri)
+                    val app = getApplication<Application>()
+                    app.contentResolver.openInputStream(uri).use { input ->
+                        requireNotNull(input) { "파일을 열 수 없습니다" }
+                        dest.outputStream().use { output ->
+                            val buf = ByteArray(1 shl 16)
+                            var copied = 0L
+                            while (true) {
+                                val n = input.read(buf)
+                                if (n < 0) break
+                                output.write(buf, 0, n)
+                                copied += n
+                                if (total > 0) progress(copied.toFloat() / total)
+                            }
+                        }
+                    }
+                    // A truncated or wrong file otherwise surfaces later as an
+                    // opaque "model failed to load" during a benchmark run.
+                    val magic = ByteArray(4)
+                    dest.inputStream().use { it.read(magic) }
+                    if (!magic.contentEquals(GGML_MAGIC)) {
+                        dest.delete()
+                        error("ggml 모델 파일이 아닙니다 (매직 불일치)")
+                    }
+                }
+                _state.update { it.copy(running = false, stage = "", progress = 1f) }
+                refreshModels()
+                _state.update { it.copy(selectedModel = dest) }
+            } catch (e: Throwable) {
+                dest.delete()
+                _state.update { it.copy(running = false, stage = "", error = "모델 가져오기 실패: ${e.message}") }
+            }
+        }
+    }
     fun setThreads(n: Int) = _state.update { it.copy(threads = n) }
     fun setDtw(v: Boolean) = _state.update { it.copy(useDtw = v) }
     fun setSplitOnWord(v: Boolean) = _state.update { it.copy(splitOnWord = v) }
@@ -289,6 +347,14 @@ class SpikeViewModel(app: Application) : AndroidViewModel(app) {
         val temp = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) / 10f
         return (if (scale > 0) level * 100 / scale else level) to temp
     }
+
+    private fun querySize(uri: Uri): Long =
+        runCatching {
+            getApplication<Application>().contentResolver.query(uri, null, null, null, null)?.use { c ->
+                val idx = c.getColumnIndex(OpenableColumns.SIZE)
+                if (idx >= 0 && c.moveToFirst()) c.getLong(idx) else 0L
+            }
+        }.getOrNull() ?: 0L
 
     private fun queryDisplayName(uri: Uri): String =
         runCatching {

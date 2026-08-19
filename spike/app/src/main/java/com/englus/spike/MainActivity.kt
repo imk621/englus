@@ -73,12 +73,25 @@ private fun SpikeScreen(vm: SpikeViewModel = viewModel()) {
         }
     }
 
+    // "*/*" rather than a .bin mime type: Android has no registered type for
+    // ggml weights, so a narrower filter hides the file in the picker.
+    val pickModel = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let { vm.importModel(it) } }
+
     Scaffold(topBar = { TopAppBar(title = { Text("englus · ASR 스파이크") }) }) { pad ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(pad).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            item { SetupCard(s, vm, onPick = { pickAudio.launch(arrayOf("audio/*")) }) }
+            item {
+                SetupCard(
+                    s = s,
+                    vm = vm,
+                    onPickAudio = { pickAudio.launch(arrayOf("audio/*")) },
+                    onPickModel = { pickModel.launch(arrayOf("*/*")) },
+                )
+            }
 
             if (s.running) {
                 item {
@@ -135,16 +148,21 @@ private fun SpikeScreen(vm: SpikeViewModel = viewModel()) {
 }
 
 @Composable
-private fun SetupCard(s: UiState, vm: SpikeViewModel, onPick: () -> Unit) {
+private fun SetupCard(
+    s: UiState,
+    vm: SpikeViewModel,
+    onPickAudio: () -> Unit,
+    onPickModel: () -> Unit,
+) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
 
             Text("1. 모델", style = MaterialTheme.typography.titleSmall)
             if (s.models.isEmpty()) {
                 Text(
-                    "모델이 없습니다. 아래 경로로 .bin 을 push 하세요:\n${vm.modelsDir.absolutePath}",
+                    "모델이 없습니다. ggml-base.en.bin 등을 내려받은 뒤 " +
+                        "아래 '모델 파일 가져오기'로 불러오세요.",
                     fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.error,
                 )
             } else {
@@ -158,10 +176,13 @@ private fun SetupCard(s: UiState, vm: SpikeViewModel, onPick: () -> Unit) {
                     }
                 }
             }
+            OutlinedButton(onClick = onPickModel, modifier = Modifier.fillMaxWidth()) {
+                Text("모델 파일 가져오기 (.bin)", fontSize = 13.sp)
+            }
             OutlinedButton(onClick = { vm.refreshModels() }) { Text("모델 목록 새로고침") }
 
             Text("2. 오디오", style = MaterialTheme.typography.titleSmall)
-            OutlinedButton(onClick = onPick, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = onPickAudio, modifier = Modifier.fillMaxWidth()) {
                 Text(if (s.audioName.isEmpty()) "오디오 파일 선택" else s.audioName, fontSize = 13.sp)
             }
 

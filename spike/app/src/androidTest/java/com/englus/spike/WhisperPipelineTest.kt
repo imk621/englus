@@ -131,6 +131,64 @@ class WhisperPipelineTest {
         return Uri.fromFile(out)
     }
 
+    // --- model import -------------------------------------------------------
+
+    /**
+     * Importing through the file picker is the only way to install a model
+     * without adb — Android 11+ blocks file managers from writing into
+     * Android/data/<pkg> — so a sideloaded APK is useless if this path is broken.
+     * Drives the real ViewModel so the state machine is covered too.
+     */
+    @Test
+    fun importsPickedModelAndRejectsGarbage() {
+        val source = findModel()
+        assumeTrue("no model on device to import from", source != null)
+
+        val app = appContext.applicationContext as android.app.Application
+        val vm = SpikeViewModel(app)
+
+        val staged = File(appContext.cacheDir, "ggml-import-test.bin")
+        source!!.copyTo(staged, overwrite = true)
+
+        vm.importModel(Uri.fromFile(staged))
+        awaitIdle(vm)
+
+        assertEquals("import should not error", null, vm.state.value.error)
+        val imported = File(vm.modelsDir, "ggml-import-test.bin")
+        assertTrue("model not copied to ${vm.modelsDir}", imported.exists())
+        assertEquals("copied size differs", source.length(), imported.length())
+        assertTrue(
+            "imported model should be listed",
+            vm.state.value.models.any { it.name == "ggml-import-test.bin" },
+        )
+
+        // A truncated or wrong file must be rejected at import, not surface later
+        // as an opaque "model failed to load" in the middle of a benchmark.
+        val garbage = File(appContext.cacheDir, "ggml-garbage.bin")
+        garbage.writeBytes(ByteArray(1024) { 0x41 })
+        vm.importModel(Uri.fromFile(garbage))
+        awaitIdle(vm)
+
+        assertTrue("garbage should be rejected: ${vm.state.value.error}", vm.state.value.error != null)
+        assertTrue(
+            "rejected file must not be left behind",
+            !File(vm.modelsDir, "ggml-garbage.bin").exists(),
+        )
+
+        imported.delete()
+    }
+
+    /** importModel runs on viewModelScope (main dispatcher); wait it out. */
+    private fun awaitIdle(vm: SpikeViewModel, timeoutMs: Long = 60_000) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        // Give the coroutine a chance to flip `running` to true first.
+        Thread.sleep(200)
+        while (vm.state.value.running && System.currentTimeMillis() < deadline) {
+            Thread.sleep(100)
+        }
+        assertTrue("timed out waiting for import", !vm.state.value.running)
+    }
+
     // --- transcription ------------------------------------------------------
 
     @Test
