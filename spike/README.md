@@ -55,6 +55,32 @@ python tools/json2srt.py results/<run>.json --words
 python tools/wer.py reference.txt results/<run>.txt
 ```
 
+## 에뮬레이터 검증 (선택)
+
+파이프라인이 **동작하는지**는 폰 없이도 확인할 수 있다. 단 **성능은 확인할 수 없다** —
+에뮬레이터 수치는 이 PC의 CPU를 재는 것이지 Snapdragon을 재는 게 아니다.
+
+```bash
+# AVD 부팅 (한 번 만들어두면 재사용)
+$ANDROID_HOME/emulator/emulator -avd englus_test -no-window -no-audio -no-boot-anim &
+
+# 빌드 + 설치 + 모델 push + 계측 테스트
+./tools/run-tests.sh
+```
+
+검증되는 것: JNI 로딩, MediaCodec 디코딩, 리샘플러의 청크 경계 정확도,
+whisper 전사 결과, **DTW 토큰 타임스탬프 생성**.
+
+실제 기기에서도 같은 테스트를 돌릴 수 있다:
+
+```bash
+ABI=arm64-v8a MODEL=base.en ./tools/run-tests.sh
+```
+
+> `gradlew connectedAndroidTest`는 쓰지 말 것. 앱을 언인스톨하면서 모델까지 지워
+> 전사 테스트가 조용히 SKIP되는데, assumption 실패는 통과로 집계되어 요약은
+> `OK`로 나온다. `run-tests.sh`는 이 경우를 명시적 실패로 처리한다.
+
 ## 첫 실험 권장 세트
 
 | # | 오디오 | 모델 | 스레드 | 보는 것 |
