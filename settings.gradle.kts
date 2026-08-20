@@ -22,3 +22,6 @@ include(":asr")
 // Phase 0 benchmark harness. Kept after the spike concluded because model and
 // thread-count comparisons keep coming back (see docs/phase0-results.md).
 include(":bench")
+
+// The learning app.
+include(":app")

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      Transcription runs as a foreground service: a 40-minute episode takes about
+      5 minutes on an S25, and WorkManager stops ordinary background work around
+      the 10-minute mark.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:name=".EnglusApp"
+        android:allowBackup="false"
+        android:largeHeap="true"
+        android:label="englus"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Englus">
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:label="englus">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+    </application>
+
+</manifest>
