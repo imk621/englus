@@ -31,6 +31,16 @@ data class PlayerUi(
     val hideText: Boolean = true,
     val revealed: Set<Long> = emptySet(),
     val autoScroll: Boolean = true,
+    /**
+     * Milliseconds to delay the highlight relative to the audio.
+     *
+     * Whisper's segment start times tend to run early — leading silence gets
+     * folded into the segment — so a word can light up before it is spoken. The
+     * error is a property of the transcript, not of playback, so it is corrected
+     * at display time rather than by re-transcribing.
+     */
+    val syncOffsetMs: Int = 0,
+    val showSync: Boolean = false,
 )
 
 class PlayerViewModel(
@@ -47,7 +57,9 @@ class PlayerViewModel(
         repo.observeSentences(episodeId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _ui = MutableStateFlow(PlayerUi())
+    private val prefs = app.getSharedPreferences("player", Application.MODE_PRIVATE)
+
+    private val _ui = MutableStateFlow(PlayerUi(syncOffsetMs = prefs.getInt(KEY_SYNC, 0)))
     val ui: StateFlow<PlayerUi> = _ui.asStateFlow()
 
     val player: ExoPlayer = ExoPlayer.Builder(app).build().apply {
@@ -85,15 +97,23 @@ class PlayerViewModel(
 
             if (_ui.value.repeatSentence && player.isPlaying) {
                 val s = currentSentence(pos)
-                if (s != null && pos >= s.endMs) player.seekTo(s.startMs)
+                if (s != null && transcriptTime(pos) >= s.endMs) player.seekTo(mediaTime(s.startMs))
             }
             delay(50)
         }
     }
 
+    /** Playback clock -> transcript clock. */
+    private fun transcriptTime(positionMs: Long): Long = positionMs - _ui.value.syncOffsetMs
+
+    /** Transcript clock -> playback clock, for seeking. */
+    private fun mediaTime(timestampMs: Long): Long =
+        (timestampMs + _ui.value.syncOffsetMs).coerceAtLeast(0)
+
     fun currentSentence(positionMs: Long = _ui.value.positionMs): Sentence? {
         val list = sentences.value
         if (list.isEmpty()) return null
+        val target = transcriptTime(positionMs)
         // Binary search on start time; a linear scan per 50 ms tick over 500
         // sentences would be pointless work.
         var lo = 0
@@ -101,21 +121,36 @@ class PlayerViewModel(
         var found = 0
         while (lo <= hi) {
             val mid = (lo + hi) / 2
-            if (list[mid].startMs <= positionMs) { found = mid; lo = mid + 1 } else hi = mid - 1
+            if (list[mid].startMs <= target) { found = mid; lo = mid + 1 } else hi = mid - 1
         }
         return list[found]
     }
 
     fun currentWordIndex(sentence: Sentence, positionMs: Long): Int {
-        val i = sentence.words.indexOfLast { it.startMs <= positionMs }
-        return if (i >= 0 && positionMs <= sentence.words[i].endMs + WORD_HOLD_MS) i else -1
+        val target = transcriptTime(positionMs)
+        val i = sentence.words.indexOfLast { it.startMs <= target }
+        return if (i >= 0 && target <= sentence.words[i].endMs + WORD_HOLD_MS) i else -1
     }
 
     fun playPause() = if (player.isPlaying) player.pause() else player.play()
 
     fun seekToSentence(s: Sentence) {
-        player.seekTo(s.startMs)
+        player.seekTo(mediaTime(s.startMs))
         if (!player.isPlaying) player.play()
+    }
+
+    fun toggleSync() = _ui.update { it.copy(showSync = !it.showSync) }
+
+    /** Positive offset shows the text later; whisper's starts run early, so that is the usual direction. */
+    fun adjustSync(deltaMs: Int) = _ui.update {
+        val next = (it.syncOffsetMs + deltaMs).coerceIn(-2000, 2000)
+        prefs.edit().putInt(KEY_SYNC, next).apply()
+        it.copy(syncOffsetMs = next)
+    }
+
+    fun resetSync() = _ui.update {
+        prefs.edit().putInt(KEY_SYNC, 0).apply()
+        it.copy(syncOffsetMs = 0)
     }
 
     fun step(delta: Int) {
@@ -150,5 +185,6 @@ class PlayerViewModel(
     private companion object {
         /** Keeps the last word lit through the gap before the next one starts. */
         const val WORD_HOLD_MS = 250
+        const val KEY_SYNC = "syncOffsetMs"
     }
 }
