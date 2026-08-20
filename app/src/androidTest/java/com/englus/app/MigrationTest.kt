@@ -68,6 +68,67 @@ class MigrationTest {
         }
     }
 
+    /** The path an installed phone actually takes: it already has podcasts. */
+    @Test
+    fun migrate2To3AddsDictationAndKeepsEverything() {
+        helper.createDatabase(TEST_DB, 1).close()
+        helper.runMigrationsAndValidate(TEST_DB, 2, true, EnglusDatabase.MIGRATION_1_2).use { db ->
+            db.execSQL(
+                "INSERT INTO episodes " +
+                    "(title, audioPath, durationMs, importedAt, state, progress, error, modelName, transcribeMs) " +
+                    "VALUES ('6 Minute English', '/audio/e.mp3', 360000, 1, 'DONE', 1.0, NULL, 'ggml-base.en.bin', 40000)"
+            )
+            db.execSQL(
+                "INSERT INTO sentences (episodeId, position, text, startMs, endMs, words, saved) " +
+                    "VALUES (1, 0, 'Who does the housework?', 0, 3000, '', 1)"
+            )
+            db.execSQL(
+                "INSERT INTO podcasts (feedUrl, title, imageUrl, addedAt, lastCheckedAt) " +
+                    "VALUES ('https://podcasts.files.bbci.co.uk/p02pc9tn.rss', '6 Minute English', NULL, 1, 1)"
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 3, true, EnglusDatabase.MIGRATION_2_3)
+
+        db.query("SELECT COUNT(*) FROM sentences WHERE saved = 1").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("saved sentence lost", 1, c.getInt(0))
+        }
+        db.query("SELECT COUNT(*) FROM podcasts").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("subscription lost", 1, c.getInt(0))
+        }
+        db.execSQL(
+            "INSERT INTO dictation_attempts " +
+                "(sentenceId, episodeId, userText, correctText, accuracy, diagnosis, usedSlowReplay, attemptedAt) " +
+                "VALUES (1, 1, 'who does the housework', 'Who does the housework?', 1.0, 'CORRECT', 0, 1)"
+        )
+        db.query("SELECT diagnosis FROM dictation_attempts").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("CORRECT", c.getString(0))
+        }
+    }
+
+    /** A phone that skipped the podcast build has to chain both migrations. */
+    @Test
+    fun migrate1To3ChainsBothMigrations() {
+        helper.createDatabase(TEST_DB, 1).use { db ->
+            db.execSQL(
+                "INSERT INTO episodes " +
+                    "(title, audioPath, durationMs, importedAt, state, progress, error, modelName, transcribeMs) " +
+                    "VALUES ('Day001', '/a.mp3', 1000, 1, 'DONE', 1.0, NULL, 'm', 1)"
+            )
+        }
+        val db = helper.runMigrationsAndValidate(
+            TEST_DB, 3, true,
+            EnglusDatabase.MIGRATION_1_2, EnglusDatabase.MIGRATION_2_3,
+        )
+        db.query("SELECT title FROM episodes").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("Day001", c.getString(0))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
     }
