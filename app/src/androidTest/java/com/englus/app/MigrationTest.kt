@@ -167,10 +167,55 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate4To5AddsNotesAndCascadesWithSentences() {
+        helper.createDatabase(TEST_DB, 1).close()
+        helper.runMigrationsAndValidate(
+            TEST_DB, 4, true, MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
+        ).use { db ->
+            db.execSQL(
+                "INSERT INTO episodes " +
+                    "(title, audioPath, durationMs, importedAt, state, progress, error, modelName, transcribeMs, translationState) " +
+                    "VALUES ('Day001', '/a.mp3', 1000, 1, 'DONE', 1.0, NULL, 'm', 1, 'DONE')"
+            )
+            db.execSQL(
+                "INSERT INTO sentences (episodeId, position, text, startMs, endMs, words, saved, translation) " +
+                    "VALUES (1, 0, 'ask not what your country can do for you', 0, 2000, '', 1, '기계번역')"
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 5, true, MIGRATION_4_5)
+
+        db.query("SELECT translation FROM sentences").use { c ->
+            assertTrue("sentence lost", c.moveToFirst())
+            assertEquals("기계번역", c.getString(0))
+        }
+        db.execSQL("PRAGMA foreign_keys = ON")
+        db.execSQL(
+            "INSERT INTO sentence_notes " +
+                "(sentenceId, translation, structure, expressions, grammar, sound, model, createdAt) " +
+                "VALUES (1, '나라가 무엇을 해줄지 묻지 말라', '명령문', '[]', '부정 명령', " +
+                "'can do for you 가 뭉쳐 들린다', 'gemini-3.7-flash', 1)"
+        )
+        db.query("SELECT translation FROM sentence_notes WHERE sentenceId = 1").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("나라가 무엇을 해줄지 묻지 말라", c.getString(0))
+        }
+
+        // Deleting the sentence must take its note with it, or notes outlive the
+        // episode they explain and accumulate forever.
+        db.execSQL("DELETE FROM sentences WHERE id = 1")
+        db.query("SELECT COUNT(*) FROM sentence_notes").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("note not cascaded", 0, c.getInt(0))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
         val MIGRATION_1_2 = EnglusDatabase.MIGRATION_1_2
         val MIGRATION_2_3 = EnglusDatabase.MIGRATION_2_3
         val MIGRATION_3_4 = EnglusDatabase.MIGRATION_3_4
+        val MIGRATION_4_5 = EnglusDatabase.MIGRATION_4_5
     }
 }
