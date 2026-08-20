@@ -181,6 +181,40 @@ interface ReviewDao {
 }
 
 @Dao
+interface WritingDao {
+
+    @Insert
+    suspend fun insert(writing: Writing): Long
+
+    @Insert
+    suspend fun insertMistakes(mistakes: List<WritingMistake>)
+
+    @Update
+    suspend fun update(writing: Writing)
+
+    @Query("SELECT * FROM writings ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<Writing>>
+
+    @Query("SELECT * FROM writings WHERE id = :id")
+    fun observe(id: Long): Flow<Writing?>
+
+    @Query("DELETE FROM writings WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("SELECT * FROM writing_mistakes WHERE writingId = :writingId")
+    fun observeMistakes(writingId: Long): Flow<List<WritingMistake>>
+
+    @Query("SELECT prompt FROM writings WHERE prompt != '' ORDER BY createdAt DESC LIMIT 10")
+    suspend fun recentPrompts(): List<String>
+
+    @Query("SELECT category, COUNT(*) AS count FROM writing_mistakes GROUP BY category ORDER BY count DESC")
+    fun observeMistakeCounts(): Flow<List<MistakeCount>>
+
+    @Query("SELECT COUNT(*) FROM writings")
+    fun observeCount(): Flow<Int>
+}
+
+@Dao
 interface NoteDao {
 
     @Query("SELECT * FROM sentence_notes WHERE sentenceId = :sentenceId")
@@ -244,13 +278,15 @@ interface FeedDao {
         Podcast::class, FeedItem::class,
         DictationAttempt::class, SentenceNote::class,
         ReviewCard::class, ReviewLog::class,
+        Writing::class, WritingMistake::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(
     Converters::class, FeedConverters::class,
     DictationConverters::class, ReviewConverters::class,
+    WritingConverters::class,
 )
 abstract class EnglusDatabase : RoomDatabase() {
 
@@ -259,6 +295,7 @@ abstract class EnglusDatabase : RoomDatabase() {
     abstract fun dictation(): DictationDao
     abstract fun notes(): NoteDao
     abstract fun reviews(): ReviewDao
+    abstract fun writings(): WritingDao
 
     companion object {
         @Volatile private var instance: EnglusDatabase? = null
@@ -418,12 +455,51 @@ abstract class EnglusDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds writing practice. Additive. */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `writings` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`prompt` TEXT NOT NULL, " +
+                        "`userText` TEXT NOT NULL, " +
+                        "`correctedText` TEXT NOT NULL, " +
+                        "`naturalText` TEXT NOT NULL, " +
+                        "`overall` TEXT NOT NULL, " +
+                        "`model` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_writings_createdAt` ON `writings` (`createdAt`)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `writing_mistakes` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`writingId` INTEGER NOT NULL, " +
+                        "`category` TEXT NOT NULL, " +
+                        "`original` TEXT NOT NULL, " +
+                        "`corrected` TEXT NOT NULL, " +
+                        "`explanation` TEXT NOT NULL, " +
+                        "FOREIGN KEY(`writingId`) REFERENCES `writings`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE )"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_writing_mistakes_writingId` " +
+                        "ON `writing_mistakes` (`writingId`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_writing_mistakes_category` " +
+                        "ON `writing_mistakes` (`category`)"
+                )
+            }
+        }
+
         fun get(context: Context): EnglusDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 EnglusDatabase::class.java,
                 "englus.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build().also { instance = it }
         }
     }
 }
