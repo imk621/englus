@@ -83,6 +83,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
+    // Pure-logic tests (word alignment) run on the JVM in seconds; only things
+    // that need Android or a whisper model go in androidTest.
+    testImplementation("junit:junit:4.13.2")
+
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.room:room-testing:2.6.1")
