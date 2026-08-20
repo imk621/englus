@@ -25,7 +25,18 @@ push_model() {
     adb shell rm -rf "$models"
   fi
 
-  adb shell am start -W -n "$pkg/.MainActivity" >/dev/null 2>&1 || true
+  # Ask the system for the launcher activity rather than assuming ".MainActivity":
+  # :bench and :app put it in different packages, and a wrong component silently
+  # does nothing, leaving the directory uncreated and the push unreadable.
+  local component
+  component="$(adb shell cmd package resolve-activity --brief \
+    -c android.intent.category.LAUNCHER "$pkg" 2>/dev/null | tail -1 | tr -d '\r')"
+  if [ -z "$component" ] || [ "${component#*/}" = "$component" ]; then
+    echo "error: could not resolve launcher activity for $pkg" >&2
+    return 1
+  fi
+
+  adb shell am start -W -n "$component" >/dev/null 2>&1 || true
   adb shell "n=0; while [ ! -d '$models' ] && [ \$n -lt 20 ]; do sleep 1; n=\$((n+1)); done"
   adb shell am force-stop "$pkg" >/dev/null 2>&1 || true
 
