@@ -41,6 +41,12 @@ android {
 
     buildFeatures { compose = true }
 
+    // Exported schemas make migrations testable: MigrationTestHelper builds an
+    // old database from these JSON files and runs the real migration against it.
+    // Without them a broken migration is only discovered when the app fails to
+    // open on a phone that already holds transcribed episodes.
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -79,4 +85,9 @@ dependencies {
 
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.room:room-testing:2.6.1")
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }

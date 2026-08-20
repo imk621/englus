@@ -53,6 +53,27 @@ class EpisodeRepository(private val context: Context) {
         id
     }
 
+    /** Where downloads should land so [registerDownloaded] can adopt them. */
+    fun audioFileFor(name: String): File = File(audioDir, "${System.currentTimeMillis()}-${name.take(80)}")
+
+    /**
+     * Registers audio already on disk (a podcast download) as a transcribable
+     * episode. Unlike [import] there is nothing to copy — the file was written
+     * straight into the audio directory.
+     */
+    suspend fun registerDownloaded(title: String, file: File): Long = withContext(Dispatchers.IO) {
+        val id = dao.insert(
+            Episode(
+                title = title,
+                audioPath = file.absolutePath,
+                importedAt = System.currentTimeMillis(),
+                state = TranscriptState.PENDING,
+            )
+        )
+        enqueue(id)
+        id
+    }
+
     fun enqueue(episodeId: Long) {
         val request = OneTimeWorkRequestBuilder<TranscribeWorker>()
             .setInputData(Data.Builder().putLong(TranscribeWorker.KEY_EPISODE_ID, episodeId).build())
