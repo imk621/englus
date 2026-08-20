@@ -1,5 +1,7 @@
 package com.englus.spike
 
+import com.englus.asr.AudioDecoder
+import com.englus.asr.WhisperNative
 import android.content.Context
 import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4

@@ -73,7 +73,7 @@ std::string jstring_to_std(JNIEnv *env, jstring s) {
 extern "C" {
 
 JNIEXPORT jstring JNICALL
-Java_com_englus_spike_WhisperNative_systemInfo(JNIEnv *env, jobject /*thiz*/) {
+Java_com_englus_asr_WhisperNative_systemInfo(JNIEnv *env, jobject /*thiz*/) {
     std::string info = whisper_print_system_info();
     info += " | whisper.cpp ";
     info += WHISPER_VERSION;
@@ -84,7 +84,7 @@ Java_com_englus_spike_WhisperNative_systemInfo(JNIEnv *env, jobject /*thiz*/) {
 // value matching the loaded model (BASE_EN, SMALL_EN, ...); a mismatched preset
 // makes DTW timestamps silently wrong rather than failing loudly.
 JNIEXPORT jlong JNICALL
-Java_com_englus_spike_WhisperNative_initContext(JNIEnv *env, jobject /*thiz*/,
+Java_com_englus_asr_WhisperNative_initContext(JNIEnv *env, jobject /*thiz*/,
                                                 jstring model_path, jboolean use_dtw,
                                                 jint aheads_preset) {
     const std::string path = jstring_to_std(env, model_path);
@@ -105,7 +105,7 @@ Java_com_englus_spike_WhisperNative_initContext(JNIEnv *env, jobject /*thiz*/,
 }
 
 JNIEXPORT void JNICALL
-Java_com_englus_spike_WhisperNative_freeContext(JNIEnv * /*env*/, jobject /*thiz*/, jlong ptr) {
+Java_com_englus_asr_WhisperNative_freeContext(JNIEnv * /*env*/, jobject /*thiz*/, jlong ptr) {
     if (ptr == 0) return;
     whisper_free((whisper_context *) (intptr_t) ptr);
 }
@@ -114,7 +114,7 @@ JNIEXPORT jstring JNICALL
 // n_samples is passed explicitly: the Kotlin side hands over the decoder's
 // backing array, which is deliberately larger than the audio it holds. Reading
 // GetArrayLength here would feed whisper a tail of silence.
-Java_com_englus_spike_WhisperNative_transcribe(JNIEnv *env, jobject /*thiz*/,
+Java_com_englus_asr_WhisperNative_transcribe(JNIEnv *env, jobject /*thiz*/,
                                                jlong ptr, jfloatArray audio, jint n_samples,
                                                jint n_threads, jstring language,
                                                jboolean token_timestamps, jboolean use_dtw,

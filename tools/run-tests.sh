@@ -17,10 +17,10 @@ ABI="${ABI:-x86_64}"
 MODEL="${MODEL:-tiny.en}"
 PKG="com.englus.spike"
 
-./gradlew :app:assembleDebug :app:assembleDebugAndroidTest -Pabis="$ABI" --console=plain
+./gradlew :bench:assembleDebug :bench:assembleDebugAndroidTest -Pabis="$ABI" --console=plain
 
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+adb install -r bench/build/outputs/apk/debug/*-debug.apk
+adb install -r bench/build/outputs/apk/androidTest/debug/*-androidTest.apk
 
 # Deliberately NOT `gradlew connectedAndroidTest`: that task uninstalls the app,
 # which deletes /sdcard/Android/data/$PKG and takes the model with it. The

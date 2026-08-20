@@ -1,5 +1,7 @@
 package com.englus.spike
 
+import com.englus.asr.AudioDecoder
+import com.englus.asr.WhisperNative
 import android.app.Application
 import android.content.Intent
 import android.content.IntentFilter

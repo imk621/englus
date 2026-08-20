@@ -1,4 +1,4 @@
-package com.englus.spike
+package com.englus.asr
 
 /** Thin 1:1 binding over `whisper_jni.cpp`. No logic here on purpose. */
 object WhisperNative {

@@ -28,7 +28,7 @@ cd spike
 ./tools/setup.sh
 
 # 2. 빌드해서 폰에 설치 — 반드시 release. debug 빌드의 네이티브 성능 숫자는 무의미하다.
-./gradlew :app:installRelease
+./gradlew :bench:installRelease
 
 # 3. 모델 내려받아 폰으로 push
 ./tools/fetch-model.sh base.en

@@ -7,6 +7,10 @@ plugins {
 android {
     namespace = "com.englus.spike"
     compileSdk = 35
+
+    // Required even though this module has no native code of its own. Without an
+    // NDK the app-level strip task silently passes native libs through
+    // unstripped, and the .so arriving from :asr stays at 6.8 MB instead of 1.1 MB.
     ndkVersion = "27.2.12479018"
 
     defaultConfig {
@@ -16,16 +20,15 @@ android {
         versionCode = 1
         versionName = "0.1"
 
-        // Galaxy S25 only by default — arm64 keeps the build fast and the APK small.
-        // Override for an emulator run: ./gradlew installDebug -Pabis=x86_64
-        // The default must stay arm64-only so a benchmark build can never
-        // silently be taken from a non-target architecture.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Must mirror :asr. Without it, third-party dependencies (Compose ships
+        // a native lib) contribute armeabi-v7a/x86/x86_64 copies and the APK
+        // more than doubles, even though :asr only builds arm64.
         val abis = (project.findProperty("abis") as String?)
             ?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
             ?: listOf("arm64-v8a")
         ndk { abiFilters += abis }
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -39,13 +42,6 @@ android {
         }
         debug {
             isDebuggable = true
-        }
-    }
-
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
         }
     }
 
@@ -63,6 +59,9 @@ android {
 }
 
 dependencies {
+    // whisper.cpp JNI + audio decoding. ABI selection lives there.
+    implementation(project(":asr"))
+
     implementation(platform("androidx.compose:compose-bom:2024.10.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
