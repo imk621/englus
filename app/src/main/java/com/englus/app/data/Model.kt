@@ -1,5 +1,6 @@
 package com.englus.app.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -7,6 +8,8 @@ import androidx.room.PrimaryKey
 import androidx.room.TypeConverter
 
 enum class TranscriptState { PENDING, RUNNING, DONE, FAILED }
+
+enum class TranslationState { NONE, RUNNING, DONE, FAILED }
 
 @Entity(tableName = "episodes")
 data class Episode(
@@ -21,6 +24,12 @@ data class Episode(
     val error: String? = null,
     val modelName: String? = null,
     val transcribeMs: Long = 0,
+    /**
+     * Explicit SQL default: SQLite requires one to ADD a NOT NULL column, and
+     * Room compares defaults when validating a migration.
+     */
+    @ColumnInfo(defaultValue = "NONE")
+    val translationState: TranslationState = TranslationState.NONE,
 )
 
 /** One word with the timing that makes karaoke, seek-to-sentence and shadowing possible. */
@@ -54,6 +63,12 @@ data class Sentence(
     val words: List<Word>,
     /** Marked by the user as "I could not catch this" — the seed of the review deck. */
     val saved: Boolean = false,
+    /**
+     * Korean, filled in after transcription by [com.englus.app.translate.TranslateWorker].
+     * Null until then, and null forever if translation failed — the sentence is
+     * still fully usable for listening without it.
+     */
+    val translation: String? = null,
 )
 
 class Converters {
@@ -78,6 +93,12 @@ class Converters {
     }
 
     @TypeConverter fun stateToString(s: TranscriptState): String = s.name
+
+    @TypeConverter fun translationStateToString(s: TranslationState): String = s.name
+
+    @TypeConverter
+    fun stringToTranslationState(s: String): TranslationState =
+        runCatching { TranslationState.valueOf(s) }.getOrDefault(TranslationState.NONE)
 
     @TypeConverter
     fun stringToState(s: String): TranscriptState =

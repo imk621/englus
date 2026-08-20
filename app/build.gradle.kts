@@ -80,6 +80,13 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-common:1.4.1")
 
+    // On-device en->ko translation. Free, offline, unlimited — which is what
+    // bulk-translating 500 sentences per episode needs. Cloud models read
+    // better but would put a quota and a network round trip in front of
+    // every episode.
+    implementation("com.google.mlkit:translate:17.0.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
+
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 

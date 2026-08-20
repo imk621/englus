@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
+import com.englus.app.EnglusApp
 import com.englus.app.R
 import com.englus.app.data.EnglusDatabase
 import com.englus.app.data.TranscriptState
@@ -113,6 +114,8 @@ class TranscribeWorker(
                     )
                 }
             }
+            // Only now, when there are sentences to translate.
+            (applicationContext as EnglusApp).repository.enqueueTranslation(episodeId)
             Result.success()
         } catch (e: Throwable) {
             fail(episodeId, e.message ?: e.toString())

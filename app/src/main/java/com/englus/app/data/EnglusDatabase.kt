@@ -47,6 +47,15 @@ interface EpisodeDao {
     @Query("DELETE FROM sentences WHERE episodeId = :episodeId")
     suspend fun clearSentences(episodeId: Long)
 
+    @Query("UPDATE sentences SET translation = :translation WHERE id = :id")
+    suspend fun setTranslation(id: Long, translation: String)
+
+    @Query("SELECT * FROM sentences WHERE episodeId = :episodeId AND translation IS NULL ORDER BY position")
+    suspend fun untranslated(episodeId: Long): List<Sentence>
+
+    @Query("UPDATE episodes SET translationState = :state WHERE id = :id")
+    suspend fun setTranslationState(id: Long, state: TranslationState)
+
     @Query("UPDATE sentences SET saved = :saved WHERE id = :id")
     suspend fun setSaved(id: Long, saved: Boolean)
 
@@ -149,7 +158,7 @@ interface FeedDao {
         Podcast::class, FeedItem::class,
         DictationAttempt::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(Converters::class, FeedConverters::class, DictationConverters::class)
@@ -238,12 +247,22 @@ abstract class EnglusDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds Korean translations. Additive; existing transcripts are untouched. */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sentences` ADD COLUMN `translation` TEXT")
+                db.execSQL(
+                    "ALTER TABLE `episodes` ADD COLUMN `translationState` TEXT NOT NULL DEFAULT 'NONE'"
+                )
+            }
+        }
+
         fun get(context: Context): EnglusDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 EnglusDatabase::class.java,
                 "englus.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
         }
     }
 }

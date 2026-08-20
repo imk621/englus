@@ -9,6 +9,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.englus.app.asr.TranscribeWorker
+import com.englus.app.translate.TranslateWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -85,6 +86,20 @@ class EpisodeRepository(private val context: Context) {
 
         WorkManager.getInstance(context)
             .enqueueUniqueWork("transcribe-$episodeId", ExistingWorkPolicy.REPLACE, request)
+    }
+
+    /**
+     * KEEP, not REPLACE: opening an episode retriggers this, and restarting a
+     * half-finished pass would redo work for no reason. Sentences already
+     * translated are skipped by the worker's query anyway.
+     */
+    fun enqueueTranslation(episodeId: Long) {
+        val request = OneTimeWorkRequestBuilder<TranslateWorker>()
+            .setInputData(Data.Builder().putLong(TranslateWorker.KEY_EPISODE_ID, episodeId).build())
+            .build()
+
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork("translate-$episodeId", ExistingWorkPolicy.KEEP, request)
     }
 
     suspend fun delete(episode: Episode) = withContext(Dispatchers.IO) {
