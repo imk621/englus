@@ -1,6 +1,8 @@
 package com.englus.app.ui.settings
 
 import android.app.Application
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,9 +27,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -49,6 +53,7 @@ data class SettingsUi(
     val apiKey: String = "",
     val model: String = GeminiSettings.DEFAULT_MODEL,
     val models: List<String> = emptyList(),
+    val savedKey: Boolean = false,
     val busy: Boolean = false,
     val message: String? = null,
     val error: String? = null,
@@ -59,7 +64,11 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     private val explain = (app as EnglusApp).explain
 
     private val _ui = MutableStateFlow(
-        SettingsUi(apiKey = explain.settings.apiKey, model = explain.settings.model)
+        SettingsUi(
+            apiKey = explain.settings.apiKey,
+            model = explain.settings.model,
+            savedKey = explain.settings.configured,
+        )
     )
     val ui: StateFlow<SettingsUi> = _ui.asStateFlow()
 
@@ -67,7 +76,12 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun save() {
         explain.settings.apiKey = _ui.value.apiKey
-        _ui.update { it.copy(message = "저장했습니다.") }
+        _ui.update { it.copy(savedKey = explain.settings.configured, message = "저장했습니다.") }
+    }
+
+    fun clearKey() {
+        explain.settings.apiKey = ""
+        _ui.update { it.copy(apiKey = "", savedKey = false, models = emptyList(), message = "키를 삭제했습니다.") }
     }
 
     fun selectModel(m: String) {
@@ -99,6 +113,7 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
 @Composable
 fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
     val ui by vm.ui.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Scaffold(
         topBar = {
@@ -120,15 +135,55 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
                         containerColor = MaterialTheme.colorScheme.secondaryContainer
                     )
                 ) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text("Gemini API 키", fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(6.dp))
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Gemini API 키", fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                if (ui.savedKey) "설정됨" else "미설정",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (ui.savedKey) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.error,
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
                         Text(
-                            "받아쓰기·플레이어의 '자세히' 설명에만 쓰입니다. 전사와 기본 해석은 " +
-                                "전부 기기 안에서 처리되므로 키 없이도 앱은 완전히 동작합니다.\n\n" +
-                                "aistudio.google.com 에서 무료로 발급받을 수 있습니다. " +
-                                "Gemini 앱 구독과는 별개입니다.",
+                            "'자세히' 설명에만 쓰입니다. 전사·해석·받아쓰기는 전부 기기 안에서 " +
+                                "처리되므로 키 없이도 앱은 완전히 동작합니다.",
                             fontSize = 12.sp,
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+                        Text("발급 방법", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "1. 아래 버튼으로 Google AI Studio 를 엽니다\n" +
+                                "2. Google 계정으로 로그인합니다\n" +
+                                "3. Create API key 를 눌러 키를 만듭니다\n" +
+                                "4. 키를 복사해 아래 칸에 붙여넣고 저장합니다",
+                            fontSize = 12.sp,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Button(
+                            onClick = {
+                                runCatching {
+                                    context.startActivity(
+                                        Intent(Intent.ACTION_VIEW, Uri.parse(AI_STUDIO_URL))
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("키 발급받기 (aistudio.google.com)") }
+
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "무료입니다. Gemini 앱 구독과는 별개이고, 구독만으로는 API 를 쓸 수 없습니다.\n\n" +
+                                "키는 이 기기에만 저장됩니다. 여러 사람이 쓴다면 각자 자기 키를 " +
+                                "발급받으세요 — 한 키를 나눠 쓰면 하루 사용량을 함께 소진하고, " +
+                                "누가 얼마나 썼는지도 구분되지 않습니다.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -157,6 +212,11 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
                         enabled = ui.apiKey.isNotBlank() && !ui.busy,
                         modifier = Modifier.weight(1f),
                     ) { Text(if (ui.busy) "확인 중…" else "키 확인 · 모델 목록") }
+                }
+                if (ui.savedKey) {
+                    TextButton(onClick = { vm.clearKey() }) {
+                        Text("키 삭제", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                    }
                 }
             }
 
@@ -193,3 +253,5 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
         }
     }
 }
+
+private const val AI_STUDIO_URL = "https://aistudio.google.com/app/apikey"
