@@ -46,6 +46,11 @@ class ImportAndTranscribeTest {
         val repo = EpisodeRepository(context.applicationContext as Application)
         val dao = EnglusDatabase.get(context).episodes()
 
+        // Clean at the start rather than the end: the run is idempotent either
+        // way, and leaving the episode behind gives a real one to open in the app
+        // afterwards instead of an empty library.
+        dao.observeAll().first().forEach { repo.delete(it) }
+
         val id = repo.import(Uri.fromFile(staged))
         assertTrue("import returned no id", id > 0)
 
@@ -75,7 +80,6 @@ class ImportAndTranscribeTest {
         // out of this column and a broken encoding would silently empty karaoke.
         assertTrue("words lost in storage", sentences.any { it.words.size > 2 })
 
-        repo.delete(episode!!)
         staged.delete()
     }
 
