@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,6 +40,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.englus.app.data.Episode
@@ -55,6 +58,10 @@ fun LibraryScreen(
 ) {
     val episodes by vm.episodes.collectAsStateWithLifecycle()
     val ui by vm.ui.collectAsStateWithLifecycle()
+
+    // The key is entered on another screen; re-check on resume so the prompt
+    // disappears the moment the user comes back having set it.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refreshGemini() }
 
     val pickAudio = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -99,6 +106,20 @@ fun LibraryScreen(
         ) {
             if (ui.models.isEmpty()) {
                 item { ModelSetupCard(onPick = { pickModel.launch(arrayOf("*/*")) }) }
+            }
+
+            // Only once something has actually been transcribed: the app is fully
+            // usable without a key, so prompting on an empty library would be
+            // asking for setup before showing what it buys.
+            if (!ui.geminiConfigured && !ui.geminiPromptDismissed &&
+                episodes.any { it.state == TranscriptState.DONE }
+            ) {
+                item {
+                    GeminiPromptCard(
+                        onOpen = onSettings,
+                        onDismiss = { vm.dismissGeminiPrompt() },
+                    )
+                }
             }
 
             ui.busy?.let { msg ->
@@ -152,6 +173,39 @@ fun LibraryScreen(
                     onRetry = { vm.retry(ep) },
                     onDelete = { vm.delete(ep) },
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GeminiPromptCard(onOpen: () -> Unit, onDismiss: () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        ),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text("문장 설명을 켜시겠습니까?", fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Gemini API 키를 넣으면 문장마다 '자세히'를 눌러 정확한 해석, " +
+                    "왜 안 들렸는지(연음·축약), 문법 설명을 볼 수 있습니다.",
+                fontSize = 12.sp,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "무료로 발급받을 수 있고, 키 없이도 전사·해석·받아쓰기는 그대로 동작합니다. " +
+                    "여러 사람이 쓴다면 각자 자기 키를 쓰세요.",
+                fontSize = 12.sp,
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onOpen, modifier = Modifier.weight(1f)) {
+                    Text("설정하기")
+                }
+                TextButton(onClick = onDismiss) { Text("나중에", fontSize = 12.sp) }
             }
         }
     }

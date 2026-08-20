@@ -19,6 +19,8 @@ import java.io.File
 
 data class LibraryUi(
     val models: List<File> = emptyList(),
+    val geminiConfigured: Boolean = false,
+    val geminiPromptDismissed: Boolean = false,
     val busy: String? = null,
     val progress: Float = 0f,
     val error: String? = null,
@@ -28,6 +30,8 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = (app as EnglusApp).repository
     private val modelStore = (app as EnglusApp).models
+    private val explain = (app as EnglusApp).explain
+    private val prefs = app.getSharedPreferences("library", Application.MODE_PRIVATE)
 
     val episodes: StateFlow<List<Episode>> =
         repo.observeEpisodes().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -35,7 +39,26 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     private val _ui = MutableStateFlow(LibraryUi())
     val ui: StateFlow<LibraryUi> = _ui.asStateFlow()
 
-    init { refreshModels() }
+    init {
+        refreshModels()
+        refreshGemini()
+    }
+
+    /**
+     * Re-read on resume: the key is set on another screen, and the prompt must
+     * disappear as soon as the user comes back having set it.
+     */
+    fun refreshGemini() = _ui.update {
+        it.copy(
+            geminiConfigured = explain.configured,
+            geminiPromptDismissed = prefs.getBoolean(KEY_PROMPT_DISMISSED, false),
+        )
+    }
+
+    fun dismissGeminiPrompt() {
+        prefs.edit().putBoolean(KEY_PROMPT_DISMISSED, true).apply()
+        _ui.update { it.copy(geminiPromptDismissed = true) }
+    }
 
     fun refreshModels() = _ui.update { it.copy(models = modelStore.available()) }
 
@@ -72,5 +95,9 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
 
     fun delete(episode: Episode) {
         viewModelScope.launch { repo.delete(episode) }
+    }
+
+    private companion object {
+        const val KEY_PROMPT_DISMISSED = "geminiPromptDismissed"
     }
 }
