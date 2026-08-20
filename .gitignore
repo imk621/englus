@@ -15,7 +15,7 @@ local.properties
 # whisper.cpp is not committed. tools/setup.sh restores it at the pinned commit
 # recorded in tools/whisper-pin.txt, so builds stay reproducible without
 # carrying ~200MB of third-party source in this repo.
-spike/third_party/whisper.cpp/
+third_party/whisper.cpp/
 
 # --- Large artifacts ---
 # Whisper model weights (75MB~1.5GB) and benchmark output.
