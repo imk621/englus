@@ -38,6 +38,7 @@ class ReviewViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = (app as EnglusApp).repository
     private val dao = EnglusDatabase.get(app).dictation()
     private val explainRepo = (app as EnglusApp).explain
+    private val srs = (app as EnglusApp).srs
 
     private val syncOffsetMs =
         app.getSharedPreferences("player", Application.MODE_PRIVATE).getInt("syncOffsetMs", 0)
@@ -53,6 +54,15 @@ class ReviewViewModel(app: Application) : AndroidViewModel(app) {
     val weakness: StateFlow<List<DiagnosisCount>> =
         dao.observeWeakness().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val dueCount: StateFlow<Int> =
+        srs.observeDueCount().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val totalCards: StateFlow<Int> =
+        srs.observeTotalCards().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val reviewsToday: StateFlow<Int> =
+        srs.observeReviewsToday().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     val totalAttempts: StateFlow<Int> =
         dao.observeTotalAttempts().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
@@ -63,7 +73,11 @@ class ReviewViewModel(app: Application) : AndroidViewModel(app) {
     private var loadedPath: String? = null
     private var clipEndMs = Long.MAX_VALUE
 
-    init { viewModelScope.launch { watchClipEnd() } }
+    init {
+        viewModelScope.launch { watchClipEnd() }
+        // Covers sentences saved before the scheduler existed.
+        viewModelScope.launch { srs.ensureCards() }
+    }
 
     fun setFilter(d: Diagnosis?) = _ui.update { it.copy(filter = d) }
 

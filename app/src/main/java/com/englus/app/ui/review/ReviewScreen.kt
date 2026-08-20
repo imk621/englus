@@ -14,7 +14,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -43,6 +45,7 @@ import androidx.compose.foundation.clickable
 fun ReviewScreen(
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
+    onStartSession: () -> Unit,
     vm: ReviewViewModel = viewModel(),
 ) {
     val items by vm.items.collectAsStateWithLifecycle()
@@ -51,6 +54,9 @@ fun ReviewScreen(
     val correct by vm.correctAttempts.collectAsStateWithLifecycle()
     val ui by vm.ui.collectAsStateWithLifecycle()
     val note by vm.note.collectAsStateWithLifecycle()
+    val dueCount by vm.dueCount.collectAsStateWithLifecycle()
+    val totalCards by vm.totalCards.collectAsStateWithLifecycle()
+    val reviewsToday by vm.reviewsToday.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -66,6 +72,17 @@ fun ReviewScreen(
             Modifier.fillMaxSize().padding(pad).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            if (totalCards > 0) {
+                item {
+                    DueCard(
+                        due = dueCount,
+                        total = totalCards,
+                        reviewedToday = reviewsToday,
+                        onStart = onStartSession,
+                    )
+                }
+            }
+
             if (total > 0) {
                 item { WeaknessCard(total, correct, weakness) }
             }
@@ -115,6 +132,40 @@ fun ReviewScreen(
                     onExplain = { vm.explain(item) },
                     onOpenSettings = onOpenSettings,
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Spaced repetition turns the saved list from a pile into a queue. Without it the
+ * collection only grows: every dictation failure lands here and nothing ever
+ * brings it back at the right moment.
+ */
+@Composable
+private fun DueCard(due: Int, total: Int, reviewedToday: Int, onStart: () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (due > 0) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surfaceVariant
+        ),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                if (due > 0) "오늘 복습할 문장 ${due}개" else "지금 복습할 카드가 없습니다",
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "전체 ${total}개 · 오늘 완료 ${reviewedToday}개",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (due > 0) {
+                Spacer(Modifier.height(10.dp))
+                Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text("복습 시작") }
             }
         }
     }

@@ -211,11 +211,73 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate5To6AddsSchedulingAndCascades() {
+        helper.createDatabase(TEST_DB, 1).close()
+        helper.runMigrationsAndValidate(
+            TEST_DB, 5, true, MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
+        ).use { db ->
+            db.execSQL(
+                "INSERT INTO episodes " +
+                    "(title, audioPath, durationMs, importedAt, state, progress, error, modelName, transcribeMs, translationState) " +
+                    "VALUES ('Day001', '/a.mp3', 1000, 1, 'DONE', 1.0, NULL, 'm', 1, 'DONE')"
+            )
+            db.execSQL(
+                "INSERT INTO sentences (episodeId, position, text, startMs, endMs, words, saved, translation) " +
+                    "VALUES (1, 0, 'ask not what your country can do for you', 0, 2000, '', 1, '해석')"
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 6, true, MIGRATION_5_6)
+
+        db.query("SELECT COUNT(*) FROM sentences WHERE saved = 1").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("saved sentence lost", 1, c.getInt(0))
+        }
+
+        // The backfill query is what actually creates cards; a typo there means
+        // nothing is ever due and the whole feature silently does nothing.
+        db.execSQL(
+            "INSERT INTO review_cards (sentenceId, stability, difficulty, state, due, lastReview, reps, lapses, createdAt) " +
+                "SELECT s.id, 0.0, 0.0, 'NEW', 100, 0, 0, 0, 100 FROM sentences s " +
+                "WHERE s.saved = 1 AND NOT EXISTS (SELECT 1 FROM review_cards c WHERE c.sentenceId = s.id)"
+        )
+        db.query("SELECT sentenceId, state FROM review_cards").use { c ->
+            assertTrue("backfill created nothing", c.moveToFirst())
+            assertEquals(1L, c.getLong(0))
+            assertEquals("NEW", c.getString(1))
+        }
+
+        // Running it twice must not duplicate: the unique index plus NOT EXISTS
+        // is what makes the backfill safe to call on every session.
+        db.execSQL(
+            "INSERT OR IGNORE INTO review_cards (sentenceId, stability, difficulty, state, due, lastReview, reps, lapses, createdAt) " +
+                "SELECT s.id, 0.0, 0.0, 'NEW', 100, 0, 0, 0, 100 FROM sentences s " +
+                "WHERE s.saved = 1 AND NOT EXISTS (SELECT 1 FROM review_cards c WHERE c.sentenceId = s.id)"
+        )
+        db.query("SELECT COUNT(*) FROM review_cards").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("backfill duplicated a card", 1, c.getInt(0))
+        }
+
+        db.execSQL(
+            "INSERT INTO review_logs (cardId, rating, stateBefore, elapsedDays, scheduledDays, reviewedAt) " +
+                "VALUES (1, 3, 'NEW', 0.0, 3, 200)"
+        )
+        db.execSQL("PRAGMA foreign_keys = ON")
+        db.execSQL("DELETE FROM sentences WHERE id = 1")
+        db.query("SELECT COUNT(*) FROM review_cards").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("card not cascaded", 0, c.getInt(0))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
         val MIGRATION_1_2 = EnglusDatabase.MIGRATION_1_2
         val MIGRATION_2_3 = EnglusDatabase.MIGRATION_2_3
         val MIGRATION_3_4 = EnglusDatabase.MIGRATION_3_4
         val MIGRATION_4_5 = EnglusDatabase.MIGRATION_4_5
+        val MIGRATION_5_6 = EnglusDatabase.MIGRATION_5_6
     }
 }

@@ -28,6 +28,7 @@ import com.englus.app.ui.dictation.DictationScreen
 import com.englus.app.ui.dictation.DictationViewModel
 import com.englus.app.ui.review.ReviewScreen
 import com.englus.app.ui.settings.SettingsScreen
+import com.englus.app.ui.srs.ReviewSessionScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,7 +65,11 @@ private fun Root() {
             ReviewScreen(
                 onBack = { nav.popBackStack() },
                 onOpenSettings = { nav.navigate("settings") },
+                onStartSession = { nav.navigate("srs") },
             )
+        }
+        composable("srs") {
+            ReviewSessionScreen(onBack = { nav.popBackStack() })
         }
         composable("settings") {
             SettingsScreen(onBack = { nav.popBackStack() })
