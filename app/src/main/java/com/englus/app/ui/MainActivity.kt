@@ -24,6 +24,9 @@ import com.englus.app.ui.player.PlayerViewModel
 import com.englus.app.ui.podcast.PodcastScreen
 import com.englus.app.ui.podcast.PodcastViewModel
 import com.englus.app.ui.podcast.SubscriptionsScreen
+import com.englus.app.ui.dictation.DictationScreen
+import com.englus.app.ui.dictation.DictationViewModel
+import com.englus.app.ui.review.ReviewScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,7 +55,28 @@ private fun Root() {
             LibraryScreen(
                 onOpen = { nav.navigate("player/${it.id}") },
                 onPodcasts = { nav.navigate("podcasts") },
+                onReview = { nav.navigate("review") },
             )
+        }
+        composable("review") {
+            ReviewScreen(onBack = { nav.popBackStack() })
+        }
+        composable(
+            "dictation/{episodeId}/{position}",
+            arguments = listOf(
+                navArgument("episodeId") { type = NavType.LongType },
+                navArgument("position") { type = NavType.IntType },
+            ),
+        ) { entry ->
+            val episodeId = entry.arguments?.getLong("episodeId") ?: return@composable
+            val position = entry.arguments?.getInt("position") ?: 0
+            val app = androidx.compose.ui.platform.LocalContext.current.applicationContext
+                    as android.app.Application
+            val vm: DictationViewModel = viewModel(
+                key = "dictation-$episodeId-$position",
+                factory = viewModelFactory { initializer { DictationViewModel(app, episodeId, position) } },
+            )
+            DictationScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable("podcasts") {
             SubscriptionsScreen(
@@ -84,7 +108,11 @@ private fun Root() {
                 key = "player-$id",
                 factory = viewModelFactory { initializer { PlayerViewModel(app, id) } },
             )
-            PlayerScreen(vm = vm, onBack = { nav.popBackStack() })
+            PlayerScreen(
+                vm = vm,
+                onBack = { nav.popBackStack() },
+                onDictation = { position -> nav.navigate("dictation/$id/$position") },
+            )
         }
     }
 }

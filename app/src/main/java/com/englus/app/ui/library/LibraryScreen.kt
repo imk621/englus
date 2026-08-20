@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Refresh
@@ -47,6 +48,7 @@ import com.englus.app.data.TranscriptState
 fun LibraryScreen(
     onOpen: (Episode) -> Unit,
     onPodcasts: () -> Unit,
+    onReview: () -> Unit,
     vm: LibraryViewModel = viewModel(),
 ) {
     val episodes by vm.episodes.collectAsStateWithLifecycle()
@@ -67,6 +69,9 @@ fun LibraryScreen(
             TopAppBar(
                 title = { Text("englus") },
                 actions = {
+                    IconButton(onClick = onReview) {
+                        Icon(Icons.Default.Bookmarks, "모아보기")
+                    }
                     IconButton(onClick = onPodcasts) {
                         Icon(Icons.Default.Podcasts, "팟캐스트")
                     }

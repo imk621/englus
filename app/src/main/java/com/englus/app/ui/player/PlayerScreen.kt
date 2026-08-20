@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -59,7 +60,11 @@ import com.englus.app.data.Sentence
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit) {
+fun PlayerScreen(
+    vm: PlayerViewModel,
+    onBack: () -> Unit,
+    onDictation: (Int) -> Unit,
+) {
     val episode by vm.episode.collectAsStateWithLifecycle()
     val sentences by vm.sentences.collectAsStateWithLifecycle()
     val ui by vm.ui.collectAsStateWithLifecycle()
@@ -78,6 +83,14 @@ fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit) {
                 title = { Text(episode?.title ?: "", maxLines = 1) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "뒤로") }
+                },
+                actions = {
+                    // Starts from the sentence being listened to, not the top of
+                    // the episode: dictation is most useful right where something
+                    // was missed.
+                    IconButton(onClick = { onDictation(current?.position ?: 0) }) {
+                        Icon(Icons.Default.EditNote, "받아쓰기")
+                    }
                 },
             )
         },
