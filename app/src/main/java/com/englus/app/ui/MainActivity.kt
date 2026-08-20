@@ -50,6 +50,8 @@ import com.englus.app.ui.reading.ReaderViewModel
 import com.englus.app.ui.reading.ReadingCaptureScreen
 import com.englus.app.ui.review.ReviewScreen
 import com.englus.app.ui.settings.SettingsScreen
+import com.englus.app.ui.shadowing.ShadowingScreen
+import com.englus.app.ui.shadowing.ShadowingViewModel
 import com.englus.app.ui.srs.ReviewSessionScreen
 import com.englus.app.ui.writing.WritingScreen
 
@@ -199,6 +201,7 @@ private fun Root() {
                     vm = vm,
                     onBack = { nav.popBackStack() },
                     onDictation = { position -> nav.navigate("dictation/$id/$position") },
+                    onShadowing = { position -> nav.navigate("shadowing/$id/$position") },
                     onOpenSettings = { nav.navigate("settings") },
                 )
             }
@@ -217,6 +220,24 @@ private fun Root() {
                     onBack = { nav.popBackStack() },
                     onOpenSettings = { nav.navigate("settings") },
                 )
+            }
+            composable(
+                "shadowing/{episodeId}/{position}",
+                arguments = listOf(
+                    navArgument("episodeId") { type = NavType.LongType },
+                    navArgument("position") { type = NavType.IntType },
+                ),
+            ) { e ->
+                val episodeId = e.arguments?.getLong("episodeId") ?: return@composable
+                val position = e.arguments?.getInt("position") ?: 0
+                val application = app()
+                val vm: ShadowingViewModel = viewModel(
+                    key = "shadowing-$episodeId-$position",
+                    factory = viewModelFactory {
+                        initializer { ShadowingViewModel(application, episodeId, position) }
+                    },
+                )
+                ShadowingScreen(vm = vm, onBack = { nav.popBackStack() })
             }
             composable(
                 "dictation/{episodeId}/{position}",

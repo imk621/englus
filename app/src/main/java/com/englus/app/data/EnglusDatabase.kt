@@ -215,6 +215,22 @@ interface WritingDao {
 }
 
 @Dao
+interface SpeakingDao {
+
+    @Insert
+    suspend fun insert(attempt: SpeakingAttempt): Long
+
+    @Query("SELECT AVG(accuracy) FROM speaking_attempts WHERE episodeId = :episodeId")
+    fun observeAverage(episodeId: Long): Flow<Float?>
+
+    @Query("SELECT COUNT(*) FROM speaking_attempts")
+    fun observeCount(): Flow<Int>
+
+    @Query("SELECT * FROM speaking_attempts WHERE sentenceId = :sentenceId ORDER BY attemptedAt DESC LIMIT 1")
+    suspend fun latestFor(sentenceId: Long): SpeakingAttempt?
+}
+
+@Dao
 interface NoteDao {
 
     @Query("SELECT * FROM sentence_notes WHERE sentenceId = :sentenceId")
@@ -279,8 +295,9 @@ interface FeedDao {
         DictationAttempt::class, SentenceNote::class,
         ReviewCard::class, ReviewLog::class,
         Writing::class, WritingMistake::class,
+        SpeakingAttempt::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 @TypeConverters(
@@ -296,6 +313,7 @@ abstract class EnglusDatabase : RoomDatabase() {
     abstract fun notes(): NoteDao
     abstract fun reviews(): ReviewDao
     abstract fun writings(): WritingDao
+    abstract fun speaking(): SpeakingDao
 
     companion object {
         @Volatile private var instance: EnglusDatabase? = null
@@ -503,12 +521,40 @@ abstract class EnglusDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds shadowing attempts. Additive. */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `speaking_attempts` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`sentenceId` INTEGER NOT NULL, " +
+                        "`episodeId` INTEGER NOT NULL, " +
+                        "`accuracy` REAL NOT NULL, " +
+                        "`recognizedText` TEXT NOT NULL, " +
+                        "`targetText` TEXT NOT NULL, " +
+                        "`spokenMs` INTEGER NOT NULL, " +
+                        "`targetMs` INTEGER NOT NULL, " +
+                        "`attemptedAt` INTEGER NOT NULL, " +
+                        "FOREIGN KEY(`sentenceId`) REFERENCES `sentences`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE )"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_speaking_attempts_sentenceId` " +
+                        "ON `speaking_attempts` (`sentenceId`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_speaking_attempts_attemptedAt` " +
+                        "ON `speaking_attempts` (`attemptedAt`)"
+                )
+            }
+        }
+
         fun get(context: Context): EnglusDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 EnglusDatabase::class.java,
                 "englus.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build().also { instance = it }
         }
     }
 }

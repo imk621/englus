@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -75,6 +76,7 @@ fun PlayerScreen(
     vm: PlayerViewModel,
     onBack: () -> Unit,
     onDictation: (Int) -> Unit,
+    onShadowing: (Int) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val episode by vm.episode.collectAsStateWithLifecycle()
@@ -101,6 +103,9 @@ fun PlayerScreen(
                     // Starts from the sentence being listened to, not the top of
                     // the episode: dictation is most useful right where something
                     // was missed.
+                    IconButton(onClick = { onShadowing(current?.position ?: 0) }) {
+                        Icon(Icons.Default.Mic, "쉐도잉")
+                    }
                     IconButton(onClick = { onDictation(current?.position ?: 0) }) {
                         Icon(Icons.Default.EditNote, "받아쓰기")
                     }

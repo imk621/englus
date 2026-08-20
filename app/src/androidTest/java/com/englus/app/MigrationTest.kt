@@ -336,6 +336,46 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate8To9AddsSpeakingAttempts() {
+        helper.createDatabase(TEST_DB, 1).close()
+        helper.runMigrationsAndValidate(
+            TEST_DB, 8, true,
+            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
+            MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
+        ).use { db ->
+            db.execSQL(
+                "INSERT INTO episodes " +
+                    "(title, audioPath, durationMs, importedAt, state, progress, error, modelName, transcribeMs, translationState, kind) " +
+                    "VALUES ('Day001', '/a.mp3', 1000, 1, 'DONE', 1.0, NULL, 'm', 1, 'DONE', 'LISTENING')"
+            )
+            db.execSQL(
+                "INSERT INTO sentences (episodeId, position, text, startMs, endMs, words, saved, translation) " +
+                    "VALUES (1, 0, 'ask not what your country can do for you', 0, 2000, '', 0, NULL)"
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 9, true, MIGRATION_8_9)
+
+        db.execSQL(
+            "INSERT INTO speaking_attempts " +
+                "(sentenceId, episodeId, accuracy, recognizedText, targetText, spokenMs, targetMs, attemptedAt) " +
+                "VALUES (1, 1, 0.85, 'ask not what your country can do for you', " +
+                "'ask not what your country can do for you', 2400, 2000, 1)"
+        )
+        db.query("SELECT accuracy FROM speaking_attempts").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(0.85, c.getDouble(0), 0.001)
+        }
+
+        db.execSQL("PRAGMA foreign_keys = ON")
+        db.execSQL("DELETE FROM sentences WHERE id = 1")
+        db.query("SELECT COUNT(*) FROM speaking_attempts").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("attempt not cascaded", 0, c.getInt(0))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
         val MIGRATION_1_2 = EnglusDatabase.MIGRATION_1_2
@@ -345,5 +385,6 @@ class MigrationTest {
         val MIGRATION_5_6 = EnglusDatabase.MIGRATION_5_6
         val MIGRATION_6_7 = EnglusDatabase.MIGRATION_6_7
         val MIGRATION_7_8 = EnglusDatabase.MIGRATION_7_8
+        val MIGRATION_8_9 = EnglusDatabase.MIGRATION_8_9
     }
 }
