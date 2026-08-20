@@ -85,6 +85,8 @@ dependencies {
     // better but would put a quota and a network round trip in front of
     // every episode.
     implementation("com.google.mlkit:translate:17.0.3")
+    // Stores the user's Gemini API key behind the Android keystore.
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
@@ -93,6 +95,9 @@ dependencies {
     // Pure-logic tests (word alignment) run on the JVM in seconds; only things
     // that need Android or a whisper model go in androidTest.
     testImplementation("junit:junit:4.13.2")
+    // org.json ships with Android as stubs that throw in local unit tests;
+    // this puts a real implementation on the JVM test classpath.
+    testImplementation("org.json:json:20240303")
 
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

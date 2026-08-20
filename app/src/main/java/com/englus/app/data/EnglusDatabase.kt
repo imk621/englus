@@ -64,6 +64,10 @@ interface EpisodeDao {
 
     @Query("SELECT * FROM sentences WHERE id = :id")
     suspend fun getSentence(id: Long): Sentence?
+
+    /** Neighbouring line, used as context for a cloud explanation. */
+    @Query("SELECT text FROM sentences WHERE episodeId = :episodeId AND position = :position")
+    suspend fun sentenceTextAt(episodeId: Long, position: Int): String?
 }
 
 @Dao
@@ -105,6 +109,19 @@ interface DictationDao {
 
     @Query("SELECT COUNT(*) FROM dictation_attempts WHERE diagnosis = 'CORRECT'")
     fun observeCorrectAttempts(): Flow<Int>
+}
+
+@Dao
+interface NoteDao {
+
+    @Query("SELECT * FROM sentence_notes WHERE sentenceId = :sentenceId")
+    fun observe(sentenceId: Long): Flow<SentenceNote?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(note: SentenceNote)
+
+    @Query("DELETE FROM sentence_notes WHERE sentenceId = :sentenceId")
+    suspend fun delete(sentenceId: Long)
 }
 
 @Dao
@@ -156,9 +173,9 @@ interface FeedDao {
     entities = [
         Episode::class, Sentence::class,
         Podcast::class, FeedItem::class,
-        DictationAttempt::class,
+        DictationAttempt::class, SentenceNote::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(Converters::class, FeedConverters::class, DictationConverters::class)
@@ -167,6 +184,7 @@ abstract class EnglusDatabase : RoomDatabase() {
     abstract fun episodes(): EpisodeDao
     abstract fun feeds(): FeedDao
     abstract fun dictation(): DictationDao
+    abstract fun notes(): NoteDao
 
     companion object {
         @Volatile private var instance: EnglusDatabase? = null
@@ -257,12 +275,36 @@ abstract class EnglusDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds cached cloud explanations. Additive. */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `sentence_notes` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`sentenceId` INTEGER NOT NULL, " +
+                        "`translation` TEXT NOT NULL, " +
+                        "`structure` TEXT NOT NULL, " +
+                        "`expressions` TEXT NOT NULL, " +
+                        "`grammar` TEXT NOT NULL, " +
+                        "`sound` TEXT NOT NULL, " +
+                        "`model` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, " +
+                        "FOREIGN KEY(`sentenceId`) REFERENCES `sentences`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE )"
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_sentence_notes_sentenceId` " +
+                        "ON `sentence_notes` (`sentenceId`)"
+                )
+            }
+        }
+
         fun get(context: Context): EnglusDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 EnglusDatabase::class.java,
                 "englus.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
         }
     }
 }
