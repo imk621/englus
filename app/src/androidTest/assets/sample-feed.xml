@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Sample Learning Podcast</title>
+    <link>https://example.com</link>
+    <image>
+      <url>https://example.com/channel.png</url>
+      <title>Sample Learning Podcast</title>
+    </image>
+    <item>
+      <title>Episode with plain seconds</title>
+      <guid isPermaLink="false">guid-001</guid>
+      <pubDate>Wed, 20 Aug 2026 09:00:00 +0000</pubDate>
+      <itunes:duration>2408</itunes:duration>
+      <enclosure url="https://example.com/ep1.mp3" length="38529655" type="audio/mpeg"/>
+    </item>
+    <item>
+      <title>Episode with mm:ss duration</title>
+      <guid>guid-002</guid>
+      <pubDate>Tue, 19 Aug 2026 09:00:00 +0000</pubDate>
+      <itunes:duration>06:13</itunes:duration>
+      <enclosure url="https://example.com/ep2.mp3" length="6000000" type="audio/mpeg"/>
+    </item>
+    <item>
+      <title>Episode with hh:mm:ss and no guid</title>
+      <pubDate>Mon, 18 Aug 2026 09:00:00 +0000</pubDate>
+      <itunes:duration>1:02:03</itunes:duration>
+      <enclosure url="https://example.com/ep3.mp3" length="0" type="audio/mpeg"/>
+    </item>
+    <item>
+      <title>Item whose enclosure is an image, not audio</title>
+      <guid>guid-004</guid>
+      <pubDate>Sun, 17 Aug 2026 09:00:00 +0000</pubDate>
+      <enclosure url="https://example.com/cover.jpg" length="1000" type="image/jpeg"/>
+    </item>
+  </channel>
+</rss>
