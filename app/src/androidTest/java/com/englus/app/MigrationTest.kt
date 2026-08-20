@@ -304,6 +304,38 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate7To8AddsEpisodeKindWithListeningDefault() {
+        helper.createDatabase(TEST_DB, 1).close()
+        helper.runMigrationsAndValidate(
+            TEST_DB, 7, true,
+            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
+        ).use { db ->
+            db.execSQL(
+                "INSERT INTO episodes " +
+                    "(title, audioPath, durationMs, importedAt, state, progress, error, modelName, transcribeMs, translationState) " +
+                    "VALUES ('Day001', '/a.mp3', 1000, 1, 'DONE', 1.0, NULL, 'm', 1, 'DONE')"
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 8, true, MIGRATION_7_8)
+
+        // Everything that existed before reading was a thing is listening material.
+        db.query("SELECT kind FROM episodes").use { c ->
+            assertTrue("episode lost", c.moveToFirst())
+            assertEquals("LISTENING", c.getString(0))
+        }
+        db.execSQL(
+            "INSERT INTO episodes " +
+                "(title, audioPath, durationMs, importedAt, state, progress, error, modelName, transcribeMs, translationState, kind) " +
+                "VALUES ('사진', '', 0, 2, 'DONE', 1.0, NULL, NULL, 0, 'NONE', 'READING')"
+        )
+        db.query("SELECT COUNT(*) FROM episodes WHERE kind = 'READING'").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(1, c.getInt(0))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
         val MIGRATION_1_2 = EnglusDatabase.MIGRATION_1_2
@@ -312,5 +344,6 @@ class MigrationTest {
         val MIGRATION_4_5 = EnglusDatabase.MIGRATION_4_5
         val MIGRATION_5_6 = EnglusDatabase.MIGRATION_5_6
         val MIGRATION_6_7 = EnglusDatabase.MIGRATION_6_7
+        val MIGRATION_7_8 = EnglusDatabase.MIGRATION_7_8
     }
 }

@@ -44,6 +44,7 @@ import androidx.compose.foundation.clickable
 @Composable
 fun ReviewScreen(
     onBack: () -> Unit,
+    showBack: Boolean = true,
     onOpenSettings: () -> Unit,
     onStartSession: () -> Unit,
     vm: ReviewViewModel = viewModel(),
@@ -63,7 +64,10 @@ fun ReviewScreen(
             TopAppBar(
                 title = { Text("모아보기") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "뒤로") }
+                    // A tab root has nowhere to go back to.
+                    if (showBack) {
+                        IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "뒤로") }
+                    }
                 },
             )
         },

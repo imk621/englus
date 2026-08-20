@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -46,19 +47,22 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.englus.app.data.Episode
+import com.englus.app.data.EpisodeKind
 import com.englus.app.data.TranscriptState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
+    kind: EpisodeKind,
     onOpen: (Episode) -> Unit,
     onPodcasts: () -> Unit,
-    onReview: () -> Unit,
     onSettings: () -> Unit,
-    onWriting: () -> Unit,
+    onReadingCapture: () -> Unit,
     vm: LibraryViewModel = viewModel(),
 ) {
-    val episodes by vm.episodes.collectAsStateWithLifecycle()
+    val all by vm.episodes.collectAsStateWithLifecycle()
+    val episodes = all.filter { it.kind == kind }
+    val listening = kind == EpisodeKind.LISTENING
     val ui by vm.ui.collectAsStateWithLifecycle()
 
     // The key is entered on another screen; re-check on resume so the prompt
@@ -78,16 +82,12 @@ fun LibraryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("englus") },
+                title = { Text(if (listening) "듣기" else "읽기") },
                 actions = {
-                    IconButton(onClick = onWriting) {
-                        Icon(Icons.Default.EditNote, "영작")
-                    }
-                    IconButton(onClick = onReview) {
-                        Icon(Icons.Default.Bookmarks, "모아보기")
-                    }
-                    IconButton(onClick = onPodcasts) {
-                        Icon(Icons.Default.Podcasts, "팟캐스트")
+                    if (listening) {
+                        IconButton(onClick = onPodcasts) {
+                            Icon(Icons.Default.Podcasts, "팟캐스트")
+                        }
                     }
                     IconButton(onClick = onSettings) {
                         Icon(Icons.Default.Settings, "설정")
@@ -96,11 +96,19 @@ fun LibraryScreen(
             )
         },
         floatingActionButton = {
-            if (ui.models.isNotEmpty()) {
+            if (listening) {
+                if (ui.models.isNotEmpty()) {
+                    ExtendedFloatingActionButton(
+                        onClick = { pickAudio.launch(arrayOf("audio/*")) },
+                        icon = { Icon(Icons.Default.Add, null) },
+                        text = { Text("오디오 추가") },
+                    )
+                }
+            } else {
                 ExtendedFloatingActionButton(
-                    onClick = { pickAudio.launch(arrayOf("audio/*")) },
-                    icon = { Icon(Icons.Default.Add, null) },
-                    text = { Text("오디오 추가") },
+                    onClick = onReadingCapture,
+                    icon = { Icon(Icons.Default.PhotoCamera, null) },
+                    text = { Text("사진·텍스트 추가") },
                 )
             }
         },
@@ -109,7 +117,7 @@ fun LibraryScreen(
             Modifier.fillMaxSize().padding(pad).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (ui.models.isEmpty()) {
+            if (listening && ui.models.isEmpty()) {
                 item { ModelSetupCard(onPick = { pickModel.launch(arrayOf("*/*")) }) }
             }
 
@@ -160,10 +168,13 @@ fun LibraryScreen(
                 }
             }
 
-            if (episodes.isEmpty() && ui.models.isNotEmpty()) {
+            if (episodes.isEmpty() && (!listening || ui.models.isNotEmpty())) {
                 item {
                     Text(
-                        "오디오를 추가하면 백그라운드에서 전사한 뒤 문장 단위로 들을 수 있습니다.",
+                        if (listening)
+                            "오디오를 추가하면 백그라운드에서 전사한 뒤 문장 단위로 들을 수 있습니다."
+                        else
+                            "사진을 찍거나 텍스트를 붙여넣으면 문장으로 나눠 읽고, 해석과 설명을 볼 수 있습니다.",
                         Modifier.padding(top = 24.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 13.sp,
@@ -271,9 +282,15 @@ private fun EpisodeCard(
                     )
                 }
                 TranscriptState.DONE -> Status(
-                    buildString {
-                        append(formatDuration(episode.durationMs))
-                        episode.modelName?.let { append(" · ${it.removePrefix("ggml-").removeSuffix(".bin")}") }
+                    if (episode.kind == EpisodeKind.READING) {
+                        "읽기"
+                    } else {
+                        buildString {
+                            append(formatDuration(episode.durationMs))
+                            episode.modelName?.let {
+                                append(" · ${it.removePrefix("ggml-").removeSuffix(".bin")}")
+                            }
+                        }
                     }
                 )
                 TranscriptState.FAILED -> Text(

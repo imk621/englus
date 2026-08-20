@@ -48,6 +48,7 @@ import java.util.Locale
 @Composable
 fun WritingScreen(
     onBack: () -> Unit,
+    showBack: Boolean = true,
     onOpenSettings: () -> Unit,
     vm: WritingViewModel = viewModel(),
 ) {
@@ -61,7 +62,10 @@ fun WritingScreen(
             TopAppBar(
                 title = { Text("영작") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "뒤로") }
+                    // A tab root has nowhere to go back to.
+                    if (showBack) {
+                        IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "뒤로") }
+                    }
                 },
             )
         },

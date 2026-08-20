@@ -113,10 +113,23 @@ fun ReviewSessionScreen(onBack: () -> Unit, vm: ReviewSessionViewModel = viewMod
                             Modifier.fillMaxWidth().padding(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Text("들어보세요", fontSize = 12.sp)
-                            Spacer(Modifier.height(12.dp))
-                            FilledIconButton(onClick = { vm.play() }, modifier = Modifier.size(64.dp)) {
-                                Icon(Icons.Default.Replay, "다시 듣기", Modifier.size(30.dp))
+                            // Reading material has no audio, so its card front is
+                            // the sentence itself and the back is the meaning. A
+                            // silent play button would just be broken.
+                            if (card.audioPath.isBlank()) {
+                                Text("뜻을 떠올려 보세요", fontSize = 12.sp)
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    card.text,
+                                    fontSize = 17.sp,
+                                    textAlign = TextAlign.Center,
+                                )
+                            } else {
+                                Text("들어보세요", fontSize = 12.sp)
+                                Spacer(Modifier.height(12.dp))
+                                FilledIconButton(onClick = { vm.play() }, modifier = Modifier.size(64.dp)) {
+                                    Icon(Icons.Default.Replay, "다시 듣기", Modifier.size(30.dp))
+                                }
                             }
                             Spacer(Modifier.height(10.dp))
                             Text(
@@ -136,7 +149,10 @@ fun ReviewSessionScreen(onBack: () -> Unit, vm: ReviewSessionViewModel = viewMod
                     } else {
                         Card(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(16.dp)) {
-                                Text(card.text, fontSize = 17.sp)
+                                // Already shown on the front for reading cards.
+                                if (card.audioPath.isNotBlank()) {
+                                    Text(card.text, fontSize = 17.sp)
+                                }
                                 card.translation?.let {
                                     Spacer(Modifier.height(6.dp))
                                     Text(it, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)

@@ -7,25 +7,47 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmarks
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import androidx.navigation.NavType
+import com.englus.app.data.EpisodeKind
+import com.englus.app.ui.dictation.DictationScreen
+import com.englus.app.ui.dictation.DictationViewModel
 import com.englus.app.ui.library.LibraryScreen
 import com.englus.app.ui.player.PlayerScreen
 import com.englus.app.ui.player.PlayerViewModel
 import com.englus.app.ui.podcast.PodcastScreen
 import com.englus.app.ui.podcast.PodcastViewModel
 import com.englus.app.ui.podcast.SubscriptionsScreen
-import com.englus.app.ui.dictation.DictationScreen
-import com.englus.app.ui.dictation.DictationViewModel
+import com.englus.app.ui.reading.ReaderScreen
+import com.englus.app.ui.reading.ReaderViewModel
+import com.englus.app.ui.reading.ReadingCaptureScreen
 import com.englus.app.ui.review.ReviewScreen
 import com.englus.app.ui.settings.SettingsScreen
 import com.englus.app.ui.srs.ReviewSessionScreen
@@ -38,12 +60,25 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * The four skills are the app's top-level structure.
+ *
+ * They had been reachable only as unlabelled icons crowded into one action bar,
+ * which hid three quarters of the app behind guesswork. Tabs make what the app
+ * does legible without opening anything.
+ */
+private enum class Tab(val route: String, val label: String, val icon: ImageVector) {
+    LISTENING("tab/listening", "듣기", Icons.Default.Headphones),
+    READING("tab/reading", "읽기", Icons.Default.MenuBook),
+    WRITING("tab/writing", "쓰기", Icons.Default.EditNote),
+    REVIEW("tab/review", "복습", Icons.Default.Bookmarks),
+}
+
 @Composable
 private fun Root() {
     val nav = rememberNavController()
 
-    // Transcription runs as a foreground service; without notification permission
-    // its progress is invisible on Android 13+.
+    // Transcription progress and review reminders both post notifications.
     val askNotifications = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { }
@@ -53,92 +88,162 @@ private fun Root() {
         }
     }
 
-    NavHost(navController = nav, startDestination = "library") {
-        composable("library") {
-            LibraryScreen(
-                onOpen = { nav.navigate("player/${it.id}") },
-                onPodcasts = { nav.navigate("podcasts") },
-                onReview = { nav.navigate("review") },
-                onSettings = { nav.navigate("settings") },
-                onWriting = { nav.navigate("writing") },
-            )
-        }
-        composable("review") {
-            ReviewScreen(
-                onBack = { nav.popBackStack() },
-                onOpenSettings = { nav.navigate("settings") },
-                onStartSession = { nav.navigate("srs") },
-            )
-        }
-        composable("srs") {
-            ReviewSessionScreen(onBack = { nav.popBackStack() })
-        }
-        composable("writing") {
-            WritingScreen(
-                onBack = { nav.popBackStack() },
-                onOpenSettings = { nav.navigate("settings") },
-            )
-        }
-        composable("settings") {
-            SettingsScreen(onBack = { nav.popBackStack() })
-        }
-        composable(
-            "dictation/{episodeId}/{position}",
-            arguments = listOf(
-                navArgument("episodeId") { type = NavType.LongType },
-                navArgument("position") { type = NavType.IntType },
-            ),
-        ) { entry ->
-            val episodeId = entry.arguments?.getLong("episodeId") ?: return@composable
-            val position = entry.arguments?.getInt("position") ?: 0
-            val app = androidx.compose.ui.platform.LocalContext.current.applicationContext
-                    as android.app.Application
-            val vm: DictationViewModel = viewModel(
-                key = "dictation-$episodeId-$position",
-                factory = viewModelFactory { initializer { DictationViewModel(app, episodeId, position) } },
-            )
-            DictationScreen(
-                vm = vm,
-                onBack = { nav.popBackStack() },
-                onOpenSettings = { nav.navigate("settings") },
-            )
-        }
-        composable("podcasts") {
-            SubscriptionsScreen(
-                onOpen = { nav.navigate("podcast/$it") },
-                onBack = { nav.popBackStack() },
-            )
-        }
-        composable(
-            "podcast/{podcastId}",
-            arguments = listOf(navArgument("podcastId") { type = NavType.LongType }),
-        ) { entry ->
-            val id = entry.arguments?.getLong("podcastId") ?: return@composable
-            val app = androidx.compose.ui.platform.LocalContext.current.applicationContext
-                    as android.app.Application
-            val vm: PodcastViewModel = viewModel(
-                key = "podcast-$id",
-                factory = viewModelFactory { initializer { PodcastViewModel(app, id) } },
-            )
-            PodcastScreen(vm = vm, onBack = { nav.popBackStack() })
-        }
-        composable(
-            "player/{episodeId}",
-            arguments = listOf(navArgument("episodeId") { type = NavType.LongType }),
-        ) { entry ->
-            val id = entry.arguments?.getLong("episodeId") ?: return@composable
-            val app = androidx.compose.ui.platform.LocalContext.current.applicationContext
-                    as android.app.Application
-            val vm: PlayerViewModel = viewModel(
-                key = "player-$id",
-                factory = viewModelFactory { initializer { PlayerViewModel(app, id) } },
-            )
-            PlayerScreen(
-                vm = vm,
-                onBack = { nav.popBackStack() },
-                onDictation = { position -> nav.navigate("dictation/$id/$position") },
-                onOpenSettings = { nav.navigate("settings") },
-            )
+    val entry by nav.currentBackStackEntryAsState()
+    val route = entry?.destination?.hierarchy?.mapNotNull { it.route }?.firstOrNull()
+    val onTab = Tab.entries.any { it.route == route }
+
+    Scaffold(
+        bottomBar = {
+            // Only on the tabs themselves. A detail screen that keeps the bar
+            // invites tapping away mid-task and losing the place.
+            if (onTab) {
+                NavigationBar {
+                    Tab.entries.forEach { tab ->
+                        NavigationBarItem(
+                            selected = route == tab.route,
+                            onClick = {
+                                nav.navigate(tab.route) {
+                                    popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            icon = { Icon(tab.icon, tab.label) },
+                            label = { Text(tab.label) },
+                        )
+                    }
+                }
+            }
+        },
+    ) { pad ->
+        NavHost(
+            navController = nav,
+            startDestination = Tab.LISTENING.route,
+            modifier = Modifier.padding(bottom = pad.calculateBottomPadding()),
+        ) {
+            composable(Tab.LISTENING.route) {
+                LibraryScreen(
+                    kind = EpisodeKind.LISTENING,
+                    onOpen = { nav.navigate("player/${it.id}") },
+                    onPodcasts = { nav.navigate("podcasts") },
+                    onSettings = { nav.navigate("settings") },
+                    onReadingCapture = { nav.navigate("reading/capture") },
+                )
+            }
+            composable(Tab.READING.route) {
+                LibraryScreen(
+                    kind = EpisodeKind.READING,
+                    onOpen = { nav.navigate("reader/${it.id}") },
+                    onPodcasts = {},
+                    onSettings = { nav.navigate("settings") },
+                    onReadingCapture = { nav.navigate("reading/capture") },
+                )
+            }
+            composable(Tab.WRITING.route) {
+                WritingScreen(
+                    showBack = false,
+                    onBack = {},
+                    onOpenSettings = { nav.navigate("settings") },
+                )
+            }
+            composable(Tab.REVIEW.route) {
+                ReviewScreen(
+                    showBack = false,
+                    onBack = {},
+                    onOpenSettings = { nav.navigate("settings") },
+                    onStartSession = { nav.navigate("srs") },
+                )
+            }
+
+            composable("srs") { ReviewSessionScreen(onBack = { nav.popBackStack() }) }
+            composable("settings") { SettingsScreen(onBack = { nav.popBackStack() }) }
+            composable("podcasts") {
+                SubscriptionsScreen(
+                    onOpen = { nav.navigate("podcast/$it") },
+                    onBack = { nav.popBackStack() },
+                )
+            }
+            composable("reading/capture") {
+                ReadingCaptureScreen(
+                    onBack = { nav.popBackStack() },
+                    onOpen = { id ->
+                        nav.popBackStack()
+                        nav.navigate("reader/$id")
+                    },
+                )
+            }
+
+            composable(
+                "podcast/{podcastId}",
+                arguments = listOf(navArgument("podcastId") { type = NavType.LongType }),
+            ) { e ->
+                val id = e.arguments?.getLong("podcastId") ?: return@composable
+                val application = app()
+                val vm: PodcastViewModel = viewModel(
+                    key = "podcast-$id",
+                    factory = viewModelFactory { initializer { PodcastViewModel(application, id) } },
+                )
+                PodcastScreen(vm = vm, onBack = { nav.popBackStack() })
+            }
+            composable(
+                "player/{episodeId}",
+                arguments = listOf(navArgument("episodeId") { type = NavType.LongType }),
+            ) { e ->
+                val id = e.arguments?.getLong("episodeId") ?: return@composable
+                val application = app()
+                val vm: PlayerViewModel = viewModel(
+                    key = "player-$id",
+                    factory = viewModelFactory { initializer { PlayerViewModel(application, id) } },
+                )
+                PlayerScreen(
+                    vm = vm,
+                    onBack = { nav.popBackStack() },
+                    onDictation = { position -> nav.navigate("dictation/$id/$position") },
+                    onOpenSettings = { nav.navigate("settings") },
+                )
+            }
+            composable(
+                "reader/{episodeId}",
+                arguments = listOf(navArgument("episodeId") { type = NavType.LongType }),
+            ) { e ->
+                val id = e.arguments?.getLong("episodeId") ?: return@composable
+                val application = app()
+                val vm: ReaderViewModel = viewModel(
+                    key = "reader-$id",
+                    factory = viewModelFactory { initializer { ReaderViewModel(application, id) } },
+                )
+                ReaderScreen(
+                    vm = vm,
+                    onBack = { nav.popBackStack() },
+                    onOpenSettings = { nav.navigate("settings") },
+                )
+            }
+            composable(
+                "dictation/{episodeId}/{position}",
+                arguments = listOf(
+                    navArgument("episodeId") { type = NavType.LongType },
+                    navArgument("position") { type = NavType.IntType },
+                ),
+            ) { e ->
+                val episodeId = e.arguments?.getLong("episodeId") ?: return@composable
+                val position = e.arguments?.getInt("position") ?: 0
+                val application = app()
+                val vm: DictationViewModel = viewModel(
+                    key = "dictation-$episodeId-$position",
+                    factory = viewModelFactory {
+                        initializer { DictationViewModel(application, episodeId, position) }
+                    },
+                )
+                DictationScreen(
+                    vm = vm,
+                    onBack = { nav.popBackStack() },
+                    onOpenSettings = { nav.navigate("settings") },
+                )
+            }
         }
     }
 }
+
+@Composable
+private fun app(): android.app.Application =
+    LocalContext.current.applicationContext as android.app.Application
