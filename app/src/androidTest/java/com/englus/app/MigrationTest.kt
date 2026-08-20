@@ -41,7 +41,7 @@ class MigrationTest {
             )
         }
 
-        val db = helper.runMigrationsAndValidate(TEST_DB, 2, true, EnglusDatabase.MIGRATION_1_2)
+        val db = helper.runMigrationsAndValidate(TEST_DB, 2, true, MIGRATION_1_2)
 
         db.query("SELECT title, modelName FROM episodes").use { c ->
             assertTrue("episode lost in migration", c.moveToFirst())
@@ -72,7 +72,7 @@ class MigrationTest {
     @Test
     fun migrate2To3AddsDictationAndKeepsEverything() {
         helper.createDatabase(TEST_DB, 1).close()
-        helper.runMigrationsAndValidate(TEST_DB, 2, true, EnglusDatabase.MIGRATION_1_2).use { db ->
+        helper.runMigrationsAndValidate(TEST_DB, 2, true, MIGRATION_1_2).use { db ->
             db.execSQL(
                 "INSERT INTO episodes " +
                     "(title, audioPath, durationMs, importedAt, state, progress, error, modelName, transcribeMs) " +
@@ -88,7 +88,7 @@ class MigrationTest {
             )
         }
 
-        val db = helper.runMigrationsAndValidate(TEST_DB, 3, true, EnglusDatabase.MIGRATION_2_3)
+        val db = helper.runMigrationsAndValidate(TEST_DB, 3, true, MIGRATION_2_3)
 
         db.query("SELECT COUNT(*) FROM sentences WHERE saved = 1").use { c ->
             assertTrue(c.moveToFirst())
@@ -121,7 +121,7 @@ class MigrationTest {
         }
         val db = helper.runMigrationsAndValidate(
             TEST_DB, 3, true,
-            EnglusDatabase.MIGRATION_1_2, EnglusDatabase.MIGRATION_2_3,
+            MIGRATION_1_2, MIGRATION_2_3,
         )
         db.query("SELECT title FROM episodes").use { c ->
             assertTrue(c.moveToFirst())
@@ -129,7 +129,48 @@ class MigrationTest {
         }
     }
 
+    /**
+     * ADD COLUMN is the migration most likely to be silently wrong: SQLite needs a
+     * DEFAULT for a NOT NULL column, and Room compares defaults when validating.
+     * Existing rows must come out with the default rather than being dropped.
+     */
+    @Test
+    fun migrate3To4AddsTranslationColumnsAndKeepsRows() {
+        helper.createDatabase(TEST_DB, 1).close()
+        helper.runMigrationsAndValidate(TEST_DB, 3, true, MIGRATION_1_2, MIGRATION_2_3).use { db ->
+            db.execSQL(
+                "INSERT INTO episodes " +
+                    "(title, audioPath, durationMs, importedAt, state, progress, error, modelName, transcribeMs) " +
+                    "VALUES ('Day001', '/a.mp3', 1000, 1, 'DONE', 1.0, NULL, 'm', 1)"
+            )
+            db.execSQL(
+                "INSERT INTO sentences (episodeId, position, text, startMs, endMs, words, saved) " +
+                    "VALUES (1, 0, 'You have been a victim', 0, 2000, '', 1)"
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 4, true, MIGRATION_3_4)
+
+        db.query("SELECT translationState FROM episodes").use { c ->
+            assertTrue("episode lost", c.moveToFirst())
+            assertEquals("default not applied to existing row", "NONE", c.getString(0))
+        }
+        db.query("SELECT text, translation FROM sentences").use { c ->
+            assertTrue("sentence lost", c.moveToFirst())
+            assertEquals("You have been a victim", c.getString(0))
+            assertTrue("translation should start null", c.isNull(1))
+        }
+        db.execSQL("UPDATE sentences SET translation = '당신은 피해자였습니다' WHERE id = 1")
+        db.query("SELECT translation FROM sentences WHERE id = 1").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("당신은 피해자였습니다", c.getString(0))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
+        val MIGRATION_1_2 = EnglusDatabase.MIGRATION_1_2
+        val MIGRATION_2_3 = EnglusDatabase.MIGRATION_2_3
+        val MIGRATION_3_4 = EnglusDatabase.MIGRATION_3_4
     }
 }
