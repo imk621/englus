@@ -17,6 +17,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -25,12 +28,16 @@ import java.io.File
 data class ReviewUi(
     val filter: Diagnosis? = null,
     val playingSentenceId: Long? = null,
+    val expandedSentenceId: Long? = null,
+    val explaining: Boolean = false,
+    val explainError: String? = null,
 )
 
 class ReviewViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = (app as EnglusApp).repository
     private val dao = EnglusDatabase.get(app).dictation()
+    private val explainRepo = (app as EnglusApp).explain
 
     private val syncOffsetMs =
         app.getSharedPreferences("player", Application.MODE_PRIVATE).getInt("syncOffsetMs", 0)
@@ -59,6 +66,33 @@ class ReviewViewModel(app: Application) : AndroidViewModel(app) {
     init { viewModelScope.launch { watchClipEnd() } }
 
     fun setFilter(d: Diagnosis?) = _ui.update { it.copy(filter = d) }
+
+    val explainConfigured: Boolean get() = explainRepo.configured
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val note: StateFlow<com.englus.app.data.SentenceNote?> =
+        _ui.map { it.expandedSentenceId }.distinctUntilChanged().flatMapLatest { id ->
+            if (id == null) kotlinx.coroutines.flow.flowOf(null) else explainRepo.observeNote(id)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    fun toggleExpanded(item: SavedSentence) = _ui.update {
+        it.copy(
+            expandedSentenceId = if (it.expandedSentenceId == item.sentence.id) null else item.sentence.id,
+            explainError = null,
+        )
+    }
+
+    fun explain(item: SavedSentence) {
+        _ui.update { it.copy(explaining = true, explainError = null) }
+        viewModelScope.launch {
+            try {
+                explainRepo.explain(item.sentence, item.diagnosis)
+                _ui.update { it.copy(explaining = false) }
+            } catch (e: Throwable) {
+                _ui.update { it.copy(explaining = false, explainError = e.message ?: e.toString()) }
+            }
+        }
+    }
 
     /**
      * Plays the saved sentence's own audio, not a synthesized reading. The card is

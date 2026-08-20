@@ -57,6 +57,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.englus.app.data.Sentence
+import com.englus.app.data.SentenceNote
+import com.englus.app.ui.common.ExplainSection
+import androidx.compose.material3.TextButton
+
+/** Everything the expanded sentence needs to render its cloud explanation. */
+data class SentenceDetail(
+    val note: SentenceNote?,
+    val loading: Boolean,
+    val error: String?,
+    val onExplain: () -> Unit,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,10 +75,12 @@ fun PlayerScreen(
     vm: PlayerViewModel,
     onBack: () -> Unit,
     onDictation: (Int) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val episode by vm.episode.collectAsStateWithLifecycle()
     val sentences by vm.sentences.collectAsStateWithLifecycle()
     val ui by vm.ui.collectAsStateWithLifecycle()
+    val note by vm.note.collectAsStateWithLifecycle()
 
     val current = remember(sentences, ui.positionMs) { vm.currentSentence(ui.positionMs) }
     val listState = rememberLazyListState()
@@ -109,6 +122,17 @@ fun PlayerScreen(
                     positionMs = ui.positionMs,
                     hidden = ui.hideText && s.id !in ui.revealed,
                     showTranslation = s.id in ui.translated,
+                    detail = if (ui.detailSentenceId == s.id) {
+                        SentenceDetail(
+                            note = note,
+                            loading = ui.explaining,
+                            error = ui.explainError,
+                            onExplain = { vm.explain(s) },
+                        )
+                    } else null,
+                    explainConfigured = vm.explainConfigured,
+                    onToggleDetail = { vm.toggleDetail(s.id) },
+                    onOpenSettings = onOpenSettings,
                     onTap = { vm.seekToSentence(s) },
                     onReveal = { vm.reveal(s.id) },
                     onToggleTranslation = { vm.toggleTranslation(s.id) },
@@ -127,6 +151,10 @@ private fun SentenceRow(
     positionMs: Long,
     hidden: Boolean,
     showTranslation: Boolean,
+    detail: SentenceDetail?,
+    explainConfigured: Boolean,
+    onToggleDetail: () -> Unit,
+    onOpenSettings: () -> Unit,
     onTap: () -> Unit,
     onReveal: () -> Unit,
     onToggleTranslation: () -> Unit,
@@ -183,6 +211,19 @@ private fun SentenceRow(
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.primary,
                     )
+                    Spacer(Modifier.height(4.dp))
+                    if (detail == null) {
+                        TextButton(onClick = onToggleDetail) { Text("자세히", fontSize = 12.sp) }
+                    } else {
+                        ExplainSection(
+                            note = detail.note,
+                            loading = detail.loading,
+                            error = detail.error,
+                            configured = explainConfigured,
+                            onExplain = detail.onExplain,
+                            onOpenSettings = onOpenSettings,
+                        )
+                    }
                 }
             }
 

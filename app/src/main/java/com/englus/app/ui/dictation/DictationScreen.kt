@@ -47,11 +47,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.englus.app.data.Diagnosis
 import com.englus.app.dictation.DiffResult
 import com.englus.app.dictation.DiffStatus
+import com.englus.app.ui.common.ExplainSection
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DictationScreen(vm: DictationViewModel, onBack: () -> Unit) {
+fun DictationScreen(
+    vm: DictationViewModel,
+    onBack: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     val ui by vm.ui.collectAsStateWithLifecycle()
+    val note by vm.note.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -189,6 +195,14 @@ fun DictationScreen(vm: DictationViewModel, onBack: () -> Unit) {
                             }
                         }
                     }
+                    ExplainSection(
+                        note = note,
+                        loading = ui.explaining,
+                        error = ui.explainError,
+                        configured = vm.explainConfigured,
+                        onExplain = { vm.explain() },
+                        onOpenSettings = onOpenSettings,
+                    )
                     Button(onClick = { vm.next() }, modifier = Modifier.fillMaxWidth()) {
                         Text("다음 문장")
                     }

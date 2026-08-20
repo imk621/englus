@@ -35,15 +35,22 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.englus.app.data.Diagnosis
 import com.englus.app.data.SavedSentence
+import com.englus.app.ui.common.ExplainSection
+import androidx.compose.foundation.clickable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReviewScreen(onBack: () -> Unit, vm: ReviewViewModel = viewModel()) {
+fun ReviewScreen(
+    onBack: () -> Unit,
+    onOpenSettings: () -> Unit,
+    vm: ReviewViewModel = viewModel(),
+) {
     val items by vm.items.collectAsStateWithLifecycle()
     val weakness by vm.weakness.collectAsStateWithLifecycle()
     val total by vm.totalAttempts.collectAsStateWithLifecycle()
     val correct by vm.correctAttempts.collectAsStateWithLifecycle()
     val ui by vm.ui.collectAsStateWithLifecycle()
+    val note by vm.note.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -97,8 +104,16 @@ fun ReviewScreen(onBack: () -> Unit, vm: ReviewViewModel = viewModel()) {
                 SavedCard(
                     item = item,
                     playing = ui.playingSentenceId == item.sentence.id,
+                    expanded = ui.expandedSentenceId == item.sentence.id,
+                    note = if (ui.expandedSentenceId == item.sentence.id) note else null,
+                    explaining = ui.explaining && ui.expandedSentenceId == item.sentence.id,
+                    explainError = if (ui.expandedSentenceId == item.sentence.id) ui.explainError else null,
+                    explainConfigured = vm.explainConfigured,
                     onPlay = { vm.play(item) },
                     onRemove = { vm.remove(item) },
+                    onToggleExpanded = { vm.toggleExpanded(item) },
+                    onExplain = { vm.explain(item) },
+                    onOpenSettings = onOpenSettings,
                 )
             }
         }
@@ -162,10 +177,18 @@ private fun hint(weakness: List<com.englus.app.data.DiagnosisCount>): String {
 private fun SavedCard(
     item: SavedSentence,
     playing: Boolean,
+    expanded: Boolean,
+    note: com.englus.app.data.SentenceNote?,
+    explaining: Boolean,
+    explainError: String?,
+    explainConfigured: Boolean,
     onPlay: () -> Unit,
     onRemove: () -> Unit,
+    onToggleExpanded: () -> Unit,
+    onExplain: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth().clickable(onClick = onToggleExpanded)) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -204,6 +227,18 @@ private fun SavedCard(
                     )
                 }
                 IconButton(onClick = onRemove) { Icon(Icons.Default.Close, "목록에서 제거") }
+            }
+
+            if (expanded) {
+                Spacer(Modifier.height(8.dp))
+                ExplainSection(
+                    note = note,
+                    loading = explaining,
+                    error = explainError,
+                    configured = explainConfigured,
+                    onExplain = onExplain,
+                    onOpenSettings = onOpenSettings,
+                )
             }
         }
     }

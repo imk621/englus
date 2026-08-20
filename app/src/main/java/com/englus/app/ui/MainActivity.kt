@@ -27,6 +27,7 @@ import com.englus.app.ui.podcast.SubscriptionsScreen
 import com.englus.app.ui.dictation.DictationScreen
 import com.englus.app.ui.dictation.DictationViewModel
 import com.englus.app.ui.review.ReviewScreen
+import com.englus.app.ui.settings.SettingsScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,10 +57,17 @@ private fun Root() {
                 onOpen = { nav.navigate("player/${it.id}") },
                 onPodcasts = { nav.navigate("podcasts") },
                 onReview = { nav.navigate("review") },
+                onSettings = { nav.navigate("settings") },
             )
         }
         composable("review") {
-            ReviewScreen(onBack = { nav.popBackStack() })
+            ReviewScreen(
+                onBack = { nav.popBackStack() },
+                onOpenSettings = { nav.navigate("settings") },
+            )
+        }
+        composable("settings") {
+            SettingsScreen(onBack = { nav.popBackStack() })
         }
         composable(
             "dictation/{episodeId}/{position}",
@@ -76,7 +84,11 @@ private fun Root() {
                 key = "dictation-$episodeId-$position",
                 factory = viewModelFactory { initializer { DictationViewModel(app, episodeId, position) } },
             )
-            DictationScreen(vm = vm, onBack = { nav.popBackStack() })
+            DictationScreen(
+                vm = vm,
+                onBack = { nav.popBackStack() },
+                onOpenSettings = { nav.navigate("settings") },
+            )
         }
         composable("podcasts") {
             SubscriptionsScreen(
@@ -112,6 +124,7 @@ private fun Root() {
                 vm = vm,
                 onBack = { nav.popBackStack() },
                 onDictation = { position -> nav.navigate("dictation/$id/$position") },
+                onOpenSettings = { nav.navigate("settings") },
             )
         }
     }

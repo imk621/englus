@@ -16,6 +16,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -47,6 +50,9 @@ data class PlayerUi(
      */
     val syncOffsetMs: Int = 0,
     val showSync: Boolean = false,
+    val detailSentenceId: Long? = null,
+    val explaining: Boolean = false,
+    val explainError: String? = null,
 )
 
 class PlayerViewModel(
@@ -55,6 +61,7 @@ class PlayerViewModel(
 ) : AndroidViewModel(app) {
 
     private val repo = (app as EnglusApp).repository
+    private val explainRepo = (app as EnglusApp).explain
 
     val episode: StateFlow<Episode?> =
         repo.observeEpisode(episodeId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -74,6 +81,34 @@ class PlayerViewModel(
                 _ui.update { it.copy(playing = isPlaying) }
             }
         })
+    }
+
+    val explainConfigured: Boolean get() = explainRepo.configured
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val note: StateFlow<com.englus.app.data.SentenceNote?> =
+        _ui.map { it.detailSentenceId }.distinctUntilChanged().flatMapLatest { id ->
+            if (id == null) kotlinx.coroutines.flow.flowOf(null) else explainRepo.observeNote(id)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    fun toggleDetail(id: Long) = _ui.update {
+        it.copy(
+            detailSentenceId = if (it.detailSentenceId == id) null else id,
+            explainError = null,
+        )
+    }
+
+    /** No diagnosis here — this is curiosity while listening, not a scored miss. */
+    fun explain(sentence: Sentence) {
+        _ui.update { it.copy(explaining = true, explainError = null) }
+        viewModelScope.launch {
+            try {
+                explainRepo.explain(sentence, null)
+                _ui.update { it.copy(explaining = false) }
+            } catch (e: Throwable) {
+                _ui.update { it.copy(explaining = false, explainError = e.message ?: e.toString()) }
+            }
+        }
     }
 
     private var prepared = false

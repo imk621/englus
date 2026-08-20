@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -50,6 +51,8 @@ data class DictationUi(
     val diagnosis: Diagnosis? = null,
     /** Shown only after scoring — seeing it earlier would answer the question. */
     val translation: String? = null,
+    val explaining: Boolean = false,
+    val explainError: String? = null,
     val finished: Boolean = false,
 )
 
@@ -61,6 +64,7 @@ class DictationViewModel(
 
     private val repo = (app as EnglusApp).repository
     private val dictationDao = EnglusDatabase.get(app).dictation()
+    private val explainRepo = (app as EnglusApp).explain
     private val episodeDao = EnglusDatabase.get(app).episodes()
 
     /** Shared with the player so a calibrated subtitle offset also trims clips. */
@@ -73,6 +77,16 @@ class DictationViewModel(
 
     private val _ui = MutableStateFlow(DictationUi(index = startPosition))
     val ui: StateFlow<DictationUi> = _ui.asStateFlow()
+
+    val explainConfigured: Boolean get() = explainRepo.configured
+
+    private val detailSentenceId = MutableStateFlow<Long?>(null)
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val note: StateFlow<com.englus.app.data.SentenceNote?> =
+        detailSentenceId.flatMapLatest { id ->
+            if (id == null) kotlinx.coroutines.flow.flowOf(null) else explainRepo.observeNote(id)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val player: ExoPlayer = ExoPlayer.Builder(app).build()
 
@@ -158,6 +172,7 @@ class DictationViewModel(
                 translation = sentence.translation,
             )
         }
+        detailSentenceId.value = sentence.id
         viewModelScope.launch {
             dictationDao.insert(
                 DictationAttempt(
@@ -178,6 +193,23 @@ class DictationViewModel(
         }
     }
 
+    /**
+     * Asked for explicitly, and only after the attempt is scored. Sending every
+     * sentence would burn the daily quota on lines the learner already understood.
+     */
+    fun explain() {
+        val sentence = current() ?: return
+        _ui.update { it.copy(explaining = true, explainError = null) }
+        viewModelScope.launch {
+            try {
+                explainRepo.explain(sentence, _ui.value.diagnosis)
+                _ui.update { it.copy(explaining = false) }
+            } catch (e: Throwable) {
+                _ui.update { it.copy(explaining = false, explainError = e.message ?: e.toString()) }
+            }
+        }
+    }
+
     fun next() {
         val list = sentences.value
         val nextIndex = _ui.value.index + 1
@@ -195,8 +227,10 @@ class DictationViewModel(
                 diff = null,
                 diagnosis = null,
                 translation = null,
+                explainError = null,
             )
         }
+        detailSentenceId.value = null
         playCurrent(slow = false)
     }
 

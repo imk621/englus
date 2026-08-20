@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -49,6 +50,7 @@ fun LibraryScreen(
     onOpen: (Episode) -> Unit,
     onPodcasts: () -> Unit,
     onReview: () -> Unit,
+    onSettings: () -> Unit,
     vm: LibraryViewModel = viewModel(),
 ) {
     val episodes by vm.episodes.collectAsStateWithLifecycle()
@@ -74,6 +76,9 @@ fun LibraryScreen(
                     }
                     IconButton(onClick = onPodcasts) {
                         Icon(Icons.Default.Podcasts, "팟캐스트")
+                    }
+                    IconButton(onClick = onSettings) {
+                        Icon(Icons.Default.Settings, "설정")
                     }
                 },
             )
