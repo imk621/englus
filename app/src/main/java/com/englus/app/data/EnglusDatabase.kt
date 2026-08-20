@@ -112,6 +112,75 @@ interface DictationDao {
 }
 
 @Dao
+interface ReviewDao {
+
+    /**
+     * Creates cards for saved sentences that do not have one yet.
+     *
+     * Done as a backfill rather than only at save time so that sentences saved
+     * before the scheduler existed still enter the rotation, and so a card is
+     * never silently missing because one write path forgot to create it.
+     *
+     * due = 0, not :now. A new card is due immediately, and stamping it with the
+     * current time made it lose a race with the due-count query by milliseconds —
+     * the card existed but nothing was ever due.
+     */
+    @Query(
+        """
+        INSERT INTO review_cards (sentenceId, stability, difficulty, state, due, lastReview, reps, lapses, createdAt)
+        SELECT s.id, 0.0, 0.0, 'NEW', 0, 0, 0, 0, :now
+        FROM sentences s
+        WHERE s.saved = 1
+          AND NOT EXISTS (SELECT 1 FROM review_cards c WHERE c.sentenceId = s.id)
+        """
+    )
+    suspend fun backfill(now: Long)
+
+    @Query(
+        """
+        SELECT c.*, s.text AS text, s.translation AS translation,
+               s.startMs AS startMs, s.endMs AS endMs,
+               e.title AS episodeTitle, e.audioPath AS audioPath,
+               (SELECT d.diagnosis FROM dictation_attempts d
+                  WHERE d.sentenceId = s.id ORDER BY d.attemptedAt DESC LIMIT 1) AS lastDiagnosis
+        FROM review_cards c
+        JOIN sentences s ON s.id = c.sentenceId
+        JOIN episodes e ON e.id = s.episodeId
+        WHERE s.saved = 1 AND c.due <= :now
+        ORDER BY c.due
+        """
+    )
+    suspend fun due(now: Long): List<DueCard>
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM review_cards c
+        JOIN sentences s ON s.id = c.sentenceId
+        WHERE s.saved = 1 AND c.due <= :now
+        """
+    )
+    fun observeDueCount(now: Long): Flow<Int>
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM review_cards c
+        JOIN sentences s ON s.id = c.sentenceId
+        WHERE s.saved = 1
+        """
+    )
+    fun observeTotalCards(): Flow<Int>
+
+    @Update
+    suspend fun update(card: ReviewCard)
+
+    @Insert
+    suspend fun log(entry: ReviewLog)
+
+    @Query("SELECT COUNT(*) FROM review_logs WHERE reviewedAt >= :since")
+    fun observeReviewsSince(since: Long): Flow<Int>
+}
+
+@Dao
 interface NoteDao {
 
     @Query("SELECT * FROM sentence_notes WHERE sentenceId = :sentenceId")
@@ -174,17 +243,22 @@ interface FeedDao {
         Episode::class, Sentence::class,
         Podcast::class, FeedItem::class,
         DictationAttempt::class, SentenceNote::class,
+        ReviewCard::class, ReviewLog::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
-@TypeConverters(Converters::class, FeedConverters::class, DictationConverters::class)
+@TypeConverters(
+    Converters::class, FeedConverters::class,
+    DictationConverters::class, ReviewConverters::class,
+)
 abstract class EnglusDatabase : RoomDatabase() {
 
     abstract fun episodes(): EpisodeDao
     abstract fun feeds(): FeedDao
     abstract fun dictation(): DictationDao
     abstract fun notes(): NoteDao
+    abstract fun reviews(): ReviewDao
 
     companion object {
         @Volatile private var instance: EnglusDatabase? = null
@@ -299,12 +373,57 @@ abstract class EnglusDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds spaced-repetition scheduling. Additive. */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `review_cards` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`sentenceId` INTEGER NOT NULL, " +
+                        "`stability` REAL NOT NULL, " +
+                        "`difficulty` REAL NOT NULL, " +
+                        "`state` TEXT NOT NULL, " +
+                        "`due` INTEGER NOT NULL, " +
+                        "`lastReview` INTEGER NOT NULL, " +
+                        "`reps` INTEGER NOT NULL, " +
+                        "`lapses` INTEGER NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, " +
+                        "FOREIGN KEY(`sentenceId`) REFERENCES `sentences`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE )"
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_review_cards_sentenceId` " +
+                        "ON `review_cards` (`sentenceId`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_review_cards_due` ON `review_cards` (`due`)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `review_logs` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`cardId` INTEGER NOT NULL, " +
+                        "`rating` INTEGER NOT NULL, " +
+                        "`stateBefore` TEXT NOT NULL, " +
+                        "`elapsedDays` REAL NOT NULL, " +
+                        "`scheduledDays` INTEGER NOT NULL, " +
+                        "`reviewedAt` INTEGER NOT NULL)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_review_logs_cardId` ON `review_logs` (`cardId`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_review_logs_reviewedAt` " +
+                        "ON `review_logs` (`reviewedAt`)"
+                )
+            }
+        }
+
         fun get(context: Context): EnglusDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 EnglusDatabase::class.java,
                 "englus.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
         }
     }
 }

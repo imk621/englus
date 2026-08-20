@@ -17,6 +17,7 @@ import java.io.File
 class EpisodeRepository(private val context: Context) {
 
     private val dao = EnglusDatabase.get(context).episodes()
+    private val reviews = EnglusDatabase.get(context).reviews()
     private val audioDir = File(context.getExternalFilesDir(null), "audio").apply { mkdirs() }
 
     fun observeEpisodes() = dao.observeAll()
@@ -24,7 +25,17 @@ class EpisodeRepository(private val context: Context) {
     fun observeSentences(episodeId: Long) = dao.observeSentences(episodeId)
     fun observeSaved() = dao.observeSaved()
 
-    suspend fun setSaved(sentenceId: Long, saved: Boolean) = dao.setSaved(sentenceId, saved)
+    /**
+     * Saving a sentence also creates its review card.
+     *
+     * Doing this only at session start deadlocked the feature: the review screen
+     * gates the start button on card count, cards were created only by starting a
+     * session, so the button never appeared.
+     */
+    suspend fun setSaved(sentenceId: Long, saved: Boolean) = withContext(Dispatchers.IO) {
+        dao.setSaved(sentenceId, saved)
+        if (saved) reviews.backfill(System.currentTimeMillis())
+    }
 
     /**
      * Copies the picked audio into app storage before registering it.
