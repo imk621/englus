@@ -11,6 +11,14 @@ enum class TranscriptState { PENDING, RUNNING, DONE, FAILED }
 
 enum class TranslationState { NONE, RUNNING, DONE, FAILED }
 
+/**
+ * Listening material has audio and word timings; reading material does not.
+ * Everything else — sentences, translation, explanation, bookmarks, review —
+ * is identical, which is why reading reuses this table instead of getting its
+ * own parallel one.
+ */
+enum class EpisodeKind { LISTENING, READING }
+
 @Entity(tableName = "episodes")
 data class Episode(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -30,6 +38,8 @@ data class Episode(
      */
     @ColumnInfo(defaultValue = "NONE")
     val translationState: TranslationState = TranslationState.NONE,
+    @ColumnInfo(defaultValue = "LISTENING")
+    val kind: EpisodeKind = EpisodeKind.LISTENING,
 )
 
 /** One word with the timing that makes karaoke, seek-to-sentence and shadowing possible. */
@@ -93,6 +103,12 @@ class Converters {
     }
 
     @TypeConverter fun stateToString(s: TranscriptState): String = s.name
+
+    @TypeConverter fun kindToString(k: EpisodeKind): String = k.name
+
+    @TypeConverter
+    fun stringToKind(s: String): EpisodeKind =
+        runCatching { EpisodeKind.valueOf(s) }.getOrDefault(EpisodeKind.LISTENING)
 
     @TypeConverter fun translationStateToString(s: TranslationState): String = s.name
 

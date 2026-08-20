@@ -85,6 +85,9 @@ dependencies {
     // better but would put a quota and a network round trip in front of
     // every episode.
     implementation("com.google.mlkit:translate:17.0.3")
+    // On-device OCR: free, offline, and fast enough to run on a photo the
+    // moment it is taken.
+    implementation("com.google.mlkit:text-recognition:16.0.1")
     // Stores the user's Gemini API key behind the Android keystore.
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
