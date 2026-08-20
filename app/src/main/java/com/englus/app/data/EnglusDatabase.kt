@@ -52,6 +52,50 @@ interface EpisodeDao {
 
     @Query("SELECT * FROM sentences WHERE saved = 1 ORDER BY episodeId, position")
     fun observeSaved(): Flow<List<Sentence>>
+
+    @Query("SELECT * FROM sentences WHERE id = :id")
+    suspend fun getSentence(id: Long): Sentence?
+}
+
+@Dao
+interface DictationDao {
+
+    @Insert
+    suspend fun insert(attempt: DictationAttempt): Long
+
+    /**
+     * Saved sentences joined to their audio, plus the most recent diagnosis.
+     *
+     * LEFT JOIN via subquery rather than a join on the attempts table: a sentence
+     * bookmarked by hand has no attempt at all, and it still belongs in the list.
+     */
+    @Query(
+        """
+        SELECT s.*, e.title AS episodeTitle, e.audioPath AS audioPath,
+          (SELECT d.diagnosis FROM dictation_attempts d
+             WHERE d.sentenceId = s.id ORDER BY d.attemptedAt DESC LIMIT 1) AS lastDiagnosis
+        FROM sentences s
+        JOIN episodes e ON e.id = s.episodeId
+        WHERE s.saved = 1
+        ORDER BY s.episodeId, s.position
+        """
+    )
+    fun observeSaved(): Flow<List<SavedSentence>>
+
+    @Query(
+        """
+        SELECT diagnosis, COUNT(*) AS count FROM dictation_attempts
+        WHERE diagnosis != 'CORRECT'
+        GROUP BY diagnosis
+        """
+    )
+    fun observeWeakness(): Flow<List<DiagnosisCount>>
+
+    @Query("SELECT COUNT(*) FROM dictation_attempts")
+    fun observeTotalAttempts(): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM dictation_attempts WHERE diagnosis = 'CORRECT'")
+    fun observeCorrectAttempts(): Flow<Int>
 }
 
 @Dao
@@ -100,15 +144,20 @@ interface FeedDao {
 }
 
 @Database(
-    entities = [Episode::class, Sentence::class, Podcast::class, FeedItem::class],
-    version = 2,
+    entities = [
+        Episode::class, Sentence::class,
+        Podcast::class, FeedItem::class,
+        DictationAttempt::class,
+    ],
+    version = 3,
     exportSchema = true,
 )
-@TypeConverters(Converters::class, FeedConverters::class)
+@TypeConverters(Converters::class, FeedConverters::class, DictationConverters::class)
 abstract class EnglusDatabase : RoomDatabase() {
 
     abstract fun episodes(): EpisodeDao
     abstract fun feeds(): FeedDao
+    abstract fun dictation(): DictationDao
 
     companion object {
         @Volatile private var instance: EnglusDatabase? = null
@@ -161,12 +210,40 @@ abstract class EnglusDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds dictation attempts. Additive, same reasoning as [MIGRATION_1_2]. */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `dictation_attempts` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`sentenceId` INTEGER NOT NULL, " +
+                        "`episodeId` INTEGER NOT NULL, " +
+                        "`userText` TEXT NOT NULL, " +
+                        "`correctText` TEXT NOT NULL, " +
+                        "`accuracy` REAL NOT NULL, " +
+                        "`diagnosis` TEXT NOT NULL, " +
+                        "`usedSlowReplay` INTEGER NOT NULL, " +
+                        "`attemptedAt` INTEGER NOT NULL, " +
+                        "FOREIGN KEY(`sentenceId`) REFERENCES `sentences`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE )"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_dictation_attempts_sentenceId` " +
+                        "ON `dictation_attempts` (`sentenceId`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_dictation_attempts_attemptedAt` " +
+                        "ON `dictation_attempts` (`attemptedAt`)"
+                )
+            }
+        }
+
         fun get(context: Context): EnglusDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 EnglusDatabase::class.java,
                 "englus.db",
-            ).addMigrations(MIGRATION_1_2).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
         }
     }
 }
