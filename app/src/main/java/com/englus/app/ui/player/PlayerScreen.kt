@@ -1,0 +1,235 @@
+package com.englus.app.ui.player
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.englus.app.data.Sentence
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit) {
+    val episode by vm.episode.collectAsStateWithLifecycle()
+    val sentences by vm.sentences.collectAsStateWithLifecycle()
+    val ui by vm.ui.collectAsStateWithLifecycle()
+
+    val current = remember(sentences, ui.positionMs) { vm.currentSentence(ui.positionMs) }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(current?.position, ui.autoScroll) {
+        val pos = current?.position ?: return@LaunchedEffect
+        if (ui.autoScroll) listState.animateScrollToItem(pos)
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(episode?.title ?: "", maxLines = 1) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "뒤로") }
+                },
+            )
+        },
+        bottomBar = { Controls(vm, ui) },
+    ) { pad ->
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().padding(pad),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            itemsIndexed(sentences, key = { _, s -> s.id }) { _, s ->
+                SentenceRow(
+                    sentence = s,
+                    isCurrent = s.id == current?.id,
+                    positionMs = ui.positionMs,
+                    hidden = ui.hideText && s.id !in ui.revealed,
+                    onTap = { vm.seekToSentence(s) },
+                    onReveal = { vm.reveal(s.id) },
+                    onToggleSaved = { vm.toggleSaved(s) },
+                    wordIndex = { vm.currentWordIndex(s, ui.positionMs) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SentenceRow(
+    sentence: Sentence,
+    isCurrent: Boolean,
+    positionMs: Long,
+    hidden: Boolean,
+    onTap: () -> Unit,
+    onReveal: () -> Unit,
+    onToggleSaved: () -> Unit,
+    wordIndex: () -> Int,
+) {
+    val bg = if (isCurrent) MaterialTheme.colorScheme.primaryContainer
+    else MaterialTheme.colorScheme.surfaceVariant
+
+    Surface(
+        color = bg,
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onTap),
+    ) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    formatTime(sentence.startMs),
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(3.dp))
+
+                if (hidden) {
+                    // Masked, not removed: the shape of the line still tells you
+                    // how much you missed, and one tap settles it.
+                    Text(
+                        "•".repeat(sentence.text.length.coerceAtMost(60)),
+                        fontSize = 16.sp,
+                        modifier = Modifier.clickable(onClick = onReveal),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else if (isCurrent && sentence.words.isNotEmpty()) {
+                    Text(karaoke(sentence, wordIndex()), fontSize = 16.sp)
+                } else {
+                    Text(sentence.text, fontSize = 16.sp)
+                }
+            }
+
+            IconButton(onClick = onToggleSaved, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    if (sentence.saved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                    contentDescription = "못 알아들은 문장 저장",
+                    tint = if (sentence.saved) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+private fun karaoke(sentence: Sentence, activeIndex: Int) = buildAnnotatedString {
+    sentence.words.forEachIndexed { i, w ->
+        if (i > 0) append(" ")
+        if (i == activeIndex) {
+            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(w.text) }
+        } else {
+            append(w.text)
+        }
+    }
+}
+
+@Composable
+private fun Controls(vm: PlayerViewModel, ui: PlayerUi) {
+    Surface(tonalElevation = 3.dp) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f).forEach { s ->
+                    FilterChip(
+                        selected = ui.speed == s,
+                        onClick = { vm.setSpeed(s) },
+                        label = { Text(if (s == 1f) "1x" else "${s}x", fontSize = 11.sp) },
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(6.dp))
+
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = { vm.toggleHideText() }) {
+                    Icon(
+                        if (ui.hideText) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = "자막 가리기",
+                        tint = if (ui.hideText) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(onClick = { vm.step(-1) }) {
+                    Icon(Icons.Default.SkipPrevious, "이전 문장")
+                }
+                FilledIconButton(
+                    onClick = { vm.playPause() },
+                    colors = IconButtonDefaults.filledIconButtonColors(),
+                ) {
+                    Icon(
+                        if (ui.playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = "재생/일시정지",
+                    )
+                }
+                IconButton(onClick = { vm.step(1) }) {
+                    Icon(Icons.Default.SkipNext, "다음 문장")
+                }
+                IconButton(onClick = { vm.toggleRepeat() }) {
+                    Icon(
+                        Icons.Default.Repeat,
+                        contentDescription = "문장 반복",
+                        tint = if (ui.repeatSentence) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+internal fun formatTime(ms: Long): String {
+    val total = ms / 1000
+    return "%d:%02d".format(total / 60, total % 60)
+}
