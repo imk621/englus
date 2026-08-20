@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -54,6 +55,7 @@ fun LibraryScreen(
     onPodcasts: () -> Unit,
     onReview: () -> Unit,
     onSettings: () -> Unit,
+    onWriting: () -> Unit,
     vm: LibraryViewModel = viewModel(),
 ) {
     val episodes by vm.episodes.collectAsStateWithLifecycle()
@@ -78,6 +80,9 @@ fun LibraryScreen(
             TopAppBar(
                 title = { Text("englus") },
                 actions = {
+                    IconButton(onClick = onWriting) {
+                        Icon(Icons.Default.EditNote, "영작")
+                    }
                     IconButton(onClick = onReview) {
                         Icon(Icons.Default.Bookmarks, "모아보기")
                     }

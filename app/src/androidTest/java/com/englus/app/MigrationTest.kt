@@ -272,6 +272,38 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate6To7AddsWritingAndCascades() {
+        helper.createDatabase(TEST_DB, 1).close()
+        helper.runMigrationsAndValidate(
+            TEST_DB, 6, true,
+            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+        ).close()
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 7, true, MIGRATION_6_7)
+
+        db.execSQL(
+            "INSERT INTO writings (prompt, userText, correctedText, naturalText, overall, model, createdAt) " +
+                "VALUES ('오늘 한 일', 'I go to school yesterday.', 'I went to school yesterday.', " +
+                "'I was at school yesterday.', '시제만 고치면 됩니다.', 'gemini-3.7-flash', 1)"
+        )
+        db.execSQL(
+            "INSERT INTO writing_mistakes (writingId, category, original, corrected, explanation) " +
+                "VALUES (1, 'TENSE', 'go', 'went', 'yesterday 가 있으므로 과거형이어야 합니다.')"
+        )
+        db.query("SELECT category FROM writing_mistakes").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("TENSE", c.getString(0))
+        }
+
+        db.execSQL("PRAGMA foreign_keys = ON")
+        db.execSQL("DELETE FROM writings WHERE id = 1")
+        db.query("SELECT COUNT(*) FROM writing_mistakes").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("mistake not cascaded", 0, c.getInt(0))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
         val MIGRATION_1_2 = EnglusDatabase.MIGRATION_1_2
@@ -279,5 +311,6 @@ class MigrationTest {
         val MIGRATION_3_4 = EnglusDatabase.MIGRATION_3_4
         val MIGRATION_4_5 = EnglusDatabase.MIGRATION_4_5
         val MIGRATION_5_6 = EnglusDatabase.MIGRATION_5_6
+        val MIGRATION_6_7 = EnglusDatabase.MIGRATION_6_7
     }
 }
