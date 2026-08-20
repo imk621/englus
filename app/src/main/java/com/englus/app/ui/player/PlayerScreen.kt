@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,6 +27,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -170,7 +175,32 @@ private fun karaoke(sentence: Sentence, activeIndex: Int) = buildAnnotatedString
 @Composable
 private fun Controls(vm: PlayerViewModel, ui: PlayerUi) {
     Surface(tonalElevation = 3.dp) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                // targetSdk 35 means Android 15 draws this edge to edge; without
+                // the inset the transport buttons sit under the system nav bar
+                // and both become unusable.
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+
+            if (ui.showSync) {
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("자막 싱크", fontSize = 12.sp)
+                    OutlinedButton(onClick = { vm.adjustSync(-100) }) { Text("−100ms") }
+                    Text(
+                        "%+d ms".format(ui.syncOffsetMs),
+                        fontSize = 13.sp,
+                        modifier = Modifier.clickable { vm.resetSync() },
+                    )
+                    OutlinedButton(onClick = { vm.adjustSync(+100) }) { Text("+100ms") }
+                }
+            }
 
             Row(
                 Modifier.fillMaxWidth(),
@@ -221,6 +251,14 @@ private fun Controls(vm: PlayerViewModel, ui: PlayerUi) {
                         Icons.Default.Repeat,
                         contentDescription = "문장 반복",
                         tint = if (ui.repeatSentence) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(onClick = { vm.toggleSync() }) {
+                    Icon(
+                        Icons.Default.Tune,
+                        contentDescription = "자막 싱크 조정",
+                        tint = if (ui.syncOffsetMs != 0) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
