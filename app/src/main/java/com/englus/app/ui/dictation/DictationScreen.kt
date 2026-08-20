@@ -177,6 +177,18 @@ fun DictationScreen(vm: DictationViewModel, onBack: () -> Unit) {
                 Phase.DONE -> {
                     ui.diagnosis?.let { DiagnosisCard(it, ui.diff) }
                     ui.diff?.let { DiffCard(it) }
+                    ui.translation?.let { ko ->
+                        Card {
+                            Column(Modifier.padding(14.dp)) {
+                                Text(
+                                    "해석",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(ko, fontSize = 15.sp)
+                            }
+                        }
+                    }
                     Button(onClick = { vm.next() }, modifier = Modifier.fillMaxWidth()) {
                         Text("다음 문장")
                     }

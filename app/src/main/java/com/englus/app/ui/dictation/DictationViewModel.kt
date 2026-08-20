@@ -48,6 +48,8 @@ data class DictationUi(
     val playing: Boolean = false,
     val diff: DiffResult? = null,
     val diagnosis: Diagnosis? = null,
+    /** Shown only after scoring — seeing it earlier would answer the question. */
+    val translation: String? = null,
     val finished: Boolean = false,
 )
 
@@ -148,7 +150,14 @@ class DictationViewModel(
     }
 
     private fun finish(sentence: Sentence, diff: DiffResult, diagnosis: Diagnosis) {
-        _ui.update { it.copy(phase = Phase.DONE, diff = diff, diagnosis = diagnosis) }
+        _ui.update {
+            it.copy(
+                phase = Phase.DONE,
+                diff = diff,
+                diagnosis = diagnosis,
+                translation = sentence.translation,
+            )
+        }
         viewModelScope.launch {
             dictationDao.insert(
                 DictationAttempt(
@@ -185,6 +194,7 @@ class DictationViewModel(
                 slow = false,
                 diff = null,
                 diagnosis = null,
+                translation = null,
             )
         }
         playCurrent(slow = false)

@@ -30,6 +30,12 @@ data class PlayerUi(
     /** Listen first, read second. Hiding the text is what makes this practice rather than reading. */
     val hideText: Boolean = true,
     val revealed: Set<Long> = emptySet(),
+    /**
+     * Korean is a third step, never a default. A translation sitting next to
+     * every line turns intensive listening into reading Korean — the same
+     * reason the English text starts hidden.
+     */
+    val translated: Set<Long> = emptySet(),
     val autoScroll: Boolean = true,
     /**
      * Milliseconds to delay the highlight relative to the audio.
@@ -75,6 +81,11 @@ class PlayerViewModel(
     init {
         viewModelScope.launch {
             repo.observeEpisode(episodeId).collect { ep ->
+                if (ep != null && ep.translationState != com.englus.app.data.TranslationState.DONE) {
+                    // Covers episodes transcribed before translation existed,
+                    // and retries a pass that failed for want of network.
+                    repo.enqueueTranslation(episodeId)
+                }
                 if (ep != null && !prepared) {
                     prepared = true
                     player.setMediaItem(MediaItem.fromUri(Uri.fromFile(File(ep.audioPath))))
@@ -167,9 +178,15 @@ class PlayerViewModel(
 
     fun toggleRepeat() = _ui.update { it.copy(repeatSentence = !it.repeatSentence) }
 
-    fun toggleHideText() = _ui.update { it.copy(hideText = !it.hideText, revealed = emptySet()) }
+    fun toggleHideText() = _ui.update {
+        it.copy(hideText = !it.hideText, revealed = emptySet(), translated = emptySet())
+    }
 
     fun reveal(id: Long) = _ui.update { it.copy(revealed = it.revealed + id) }
+
+    fun toggleTranslation(id: Long) = _ui.update {
+        it.copy(translated = if (id in it.translated) it.translated - id else it.translated + id)
+    }
 
     fun toggleAutoScroll() = _ui.update { it.copy(autoScroll = !it.autoScroll) }
 

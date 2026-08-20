@@ -170,6 +170,12 @@ private fun SavedCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(item.sentence.text, fontSize = 15.sp)
+                    // Always visible here: the attempt is already over, and this
+                    // list exists to close the gap the attempt exposed.
+                    item.sentence.translation?.let { ko ->
+                        Spacer(Modifier.height(2.dp))
+                        Text(ko, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                    }
                     Spacer(Modifier.height(4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         item.diagnosis?.let { d ->

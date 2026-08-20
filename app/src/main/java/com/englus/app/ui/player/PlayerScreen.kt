@@ -108,8 +108,10 @@ fun PlayerScreen(
                     isCurrent = s.id == current?.id,
                     positionMs = ui.positionMs,
                     hidden = ui.hideText && s.id !in ui.revealed,
+                    showTranslation = s.id in ui.translated,
                     onTap = { vm.seekToSentence(s) },
                     onReveal = { vm.reveal(s.id) },
+                    onToggleTranslation = { vm.toggleTranslation(s.id) },
                     onToggleSaved = { vm.toggleSaved(s) },
                     wordIndex = { vm.currentWordIndex(s, ui.positionMs) },
                 )
@@ -124,8 +126,10 @@ private fun SentenceRow(
     isCurrent: Boolean,
     positionMs: Long,
     hidden: Boolean,
+    showTranslation: Boolean,
     onTap: () -> Unit,
     onReveal: () -> Unit,
+    onToggleTranslation: () -> Unit,
     onToggleSaved: () -> Unit,
     wordIndex: () -> Int,
 ) {
@@ -156,9 +160,29 @@ private fun SentenceRow(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else if (isCurrent && sentence.words.isNotEmpty()) {
-                    Text(karaoke(sentence, wordIndex()), fontSize = 16.sp)
+                    Text(
+                        karaoke(sentence, wordIndex()),
+                        fontSize = 16.sp,
+                        modifier = Modifier.clickable(onClick = onToggleTranslation),
+                    )
                 } else {
-                    Text(sentence.text, fontSize = 16.sp)
+                    Text(
+                        sentence.text,
+                        fontSize = 16.sp,
+                        modifier = Modifier.clickable(onClick = onToggleTranslation),
+                    )
+                }
+
+                // Third tap state: hidden -> English -> Korean. Reaching the
+                // translation takes a deliberate step, so it cannot pre-empt the
+                // attempt to hear the line.
+                if (!hidden && showTranslation) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        sentence.translation ?: "해석 준비 중…",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
                 }
             }
 
