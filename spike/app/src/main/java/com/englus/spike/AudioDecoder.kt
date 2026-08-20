@@ -21,13 +21,22 @@ object AudioDecoder {
 
     const val TARGET_SAMPLE_RATE = 16_000
 
+    /**
+     * [samples] is the raw backing array and may be LONGER than [sampleCount].
+     * Only the first [sampleCount] entries are audio.
+     *
+     * Handing back the backing array instead of a right-sized copy matters at
+     * podcast length: 40 minutes is 38.5M samples = 154 MB of float, and copying
+     * it once more to trim the tail would double the peak.
+     */
     class Result(
         val samples: FloatArray,
+        val sampleCount: Int,
         val sourceSampleRate: Int,
         val sourceChannels: Int,
         val decodeMs: Long,
     ) {
-        val durationSec: Double get() = samples.size.toDouble() / TARGET_SAMPLE_RATE
+        val durationSec: Double get() = sampleCount.toDouble() / TARGET_SAMPLE_RATE
     }
 
     class DecodeException(message: String) : Exception(message)
@@ -70,7 +79,17 @@ object AudioDecoder {
         var srcChannels = inputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
         var pcmEncoding = AudioFormat.ENCODING_PCM_16BIT
 
-        val out = FloatBuffer()
+        // Size the output buffer from the declared duration. Growing by doubling
+        // from a small seed is what actually causes OOM on long files: a
+        // 40-minute episode needs 154 MB, doubling overshoots to 268 MB, and
+        // during the grow the old 134 MB array is still live -- ~400 MB peak for
+        // 154 MB of audio. Allocating once, slightly over, avoids all of it.
+        val estimated = if (durationUs > 0) {
+            ((durationUs / 1_000_000.0) * TARGET_SAMPLE_RATE * 1.02).toInt() + 4096
+        } else {
+            1 shl 16
+        }
+        val out = FloatBuffer(estimated)
         var resampler = Resampler(srcRate, TARGET_SAMPLE_RATE)
         var monoScratch = FloatArray(0)
 
@@ -165,7 +184,8 @@ object AudioDecoder {
         if (out.size == 0) throw DecodeException("디코딩 결과가 비어 있습니다")
 
         return Result(
-            samples = out.toArray(),
+            samples = out.backingArray(),
+            sampleCount = out.size,
             sourceSampleRate = srcRate,
             sourceChannels = srcChannels,
             decodeMs = System.currentTimeMillis() - started,
@@ -199,16 +219,19 @@ object AudioDecoder {
     }
 
     /** Growable primitive float list — avoids boxing millions of samples. */
-    private class FloatBuffer(initial: Int = 1 shl 16) {
-        private var data = FloatArray(initial)
+    private class FloatBuffer(initial: Int) {
+        private var data = FloatArray(initial.coerceAtLeast(4096))
         var size = 0
             private set
 
         fun add(v: Float) {
-            if (size == data.size) data = data.copyOf(data.size * 2)
+            // Grows by 1.25x, not 2x. Once the buffer is pre-sized from the
+            // declared duration this should never fire; if it does (a container
+            // whose duration lies), overshooting by 154 MB is not affordable.
+            if (size == data.size) data = data.copyOf(data.size + data.size / 4 + 4096)
             data[size++] = v
         }
 
-        fun toArray(): FloatArray = data.copyOf(size)
+        fun backingArray(): FloatArray = data
     }
 }

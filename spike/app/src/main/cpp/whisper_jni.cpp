@@ -111,15 +111,22 @@ Java_com_englus_spike_WhisperNative_freeContext(JNIEnv * /*env*/, jobject /*thiz
 }
 
 JNIEXPORT jstring JNICALL
+// n_samples is passed explicitly: the Kotlin side hands over the decoder's
+// backing array, which is deliberately larger than the audio it holds. Reading
+// GetArrayLength here would feed whisper a tail of silence.
 Java_com_englus_spike_WhisperNative_transcribe(JNIEnv *env, jobject /*thiz*/,
-                                               jlong ptr, jfloatArray audio,
+                                               jlong ptr, jfloatArray audio, jint n_samples,
                                                jint n_threads, jstring language,
                                                jboolean token_timestamps, jboolean use_dtw,
                                                jint max_len, jboolean split_on_word) {
     auto *ctx = (whisper_context *) (intptr_t) ptr;
     if (ctx == nullptr) return env->NewStringUTF(R"({"ok":false,"error":"null context"})");
 
-    const jsize n_samples = env->GetArrayLength(audio);
+    const jsize capacity = env->GetArrayLength(audio);
+    if (n_samples < 0 || n_samples > capacity) {
+        return env->NewStringUTF(R"({"ok":false,"error":"n_samples out of range"})");
+    }
+
     jfloat *samples = env->GetFloatArrayElements(audio, nullptr);
     if (samples == nullptr) return env->NewStringUTF(R"({"ok":false,"error":"no samples"})");
 

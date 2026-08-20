@@ -37,6 +37,16 @@ fi
 # -r (raw) rather than the pretty stream: a skipped test is reported as OK by the
 # summary line, and a silently skipped transcription test is exactly the outcome
 # that would make this whole run meaningless.
+# The long-episode decode test needs the reference file on the device. It is the
+# only test that covers the 154 MB single-allocation path, which is where a
+# 40-minute podcast would OOM.
+if [ -f audio/reference.mp3 ]; then
+  adb push audio/reference.mp3 "/sdcard/Android/data/$PKG/files/reference.mp3"
+else
+  echo "warning: audio/reference.mp3 missing — long-file test will fail"
+  echo "         run ./tools/fetch-audio.sh first"
+fi
+
 OUT=$(adb shell am instrument -r -w \
   -e class com.englus.spike.WhisperPipelineTest \
   "$PKG.test/androidx.test.runner.AndroidJUnitRunner" 2>&1)

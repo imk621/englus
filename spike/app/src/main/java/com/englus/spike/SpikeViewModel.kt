@@ -220,6 +220,7 @@ class SpikeViewModel(app: Application) : AndroidViewModel(app) {
             val json = WhisperNative.transcribe(
                 ptr = ptr,
                 audio = pcm.samples,
+                nSamples = pcm.sampleCount,
                 nThreads = s.threads,
                 language = "en",
                 tokenTimestamps = true,

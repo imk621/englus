@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      largeHeap: a 40-minute episode is 38.5M float samples = 154 MB in one
+      array, plus whatever the codec and whisper hold. The buffer is pre-sized to
+      avoid growth spikes, but the steady-state footprint alone exceeds the
+      default per-app heap on many devices. This is a benchmark tool, not a
+      background app — the memory is the workload.
+    -->
     <application
         android:allowBackup="false"
+        android:largeHeap="true"
         android:label="englus spike"
         android:supportsRtl="true"
         android:theme="@style/Theme.EnglusSpike">

@@ -59,9 +59,11 @@ object WhisperNative {
     external fun freeContext(ptr: Long)
 
     /** @return JSON: `{ok, segments:[{t0,t1,text,tokens:[{text,t0,t1,tdtw,p}]}], timings:{}}` */
+    /** [audio] may be longer than [nSamples]; only the first [nSamples] are read. */
     external fun transcribe(
         ptr: Long,
         audio: FloatArray,
+        nSamples: Int,
         nThreads: Int,
         language: String,
         tokenTimestamps: Boolean,

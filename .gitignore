@@ -22,3 +22,4 @@ spike/third_party/whisper.cpp/
 *.bin
 models/
 results/
+audio/

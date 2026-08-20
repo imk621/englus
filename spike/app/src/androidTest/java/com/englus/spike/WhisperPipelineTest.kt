@@ -57,8 +57,11 @@ class WhisperPipelineTest {
         assertEquals("source should already be 16 kHz", 16_000, result.sourceSampleRate)
         assertEquals("source should already be mono", 1, result.sourceChannels)
         assertTrue("expected ~11 s, got ${result.durationSec}", result.durationSec in 10.0..12.0)
-        assertTrue("samples should be in [-1,1]", result.samples.all { it >= -1.01f && it <= 1.01f })
-        assertTrue("audio should not be silent", result.samples.any { kotlin.math.abs(it) > 0.01f })
+
+        // Only the first sampleCount entries are audio; the backing array is longer.
+        val audio = result.samples.asList().subList(0, result.sampleCount)
+        assertTrue("samples should be in [-1,1]", audio.all { it >= -1.01f && it <= 1.01f })
+        assertTrue("audio should not be silent", audio.any { kotlin.math.abs(it) > 0.01f })
     }
 
     /**
@@ -83,11 +86,20 @@ class WhisperPipelineTest {
         assertEquals("source rate", srcRate, result.sourceSampleRate)
         assertEquals("source channels", 2, result.sourceChannels)
         assertTrue(
-            "expected ~$expected samples, got ${result.samples.size} " +
-                "(drift ${result.samples.size - expected})",
-            kotlin.math.abs(result.samples.size - expected) <= 100,
+            "expected ~$expected samples, got ${result.sampleCount} " +
+                "(drift ${result.sampleCount - expected})",
+            kotlin.math.abs(result.sampleCount - expected) <= 100,
         )
-        assertTrue("audio should not be silent", result.samples.any { kotlin.math.abs(it) > 0.1f })
+        assertTrue(
+            "audio should not be silent",
+            result.samples.asList().subList(0, result.sampleCount).any { kotlin.math.abs(it) > 0.1f },
+        )
+        // The buffer is pre-sized from the container duration, so it must not have
+        // had to grow — growing is what blows up memory on a 40-minute file.
+        assertTrue(
+            "backing array ${result.samples.size} unexpectedly far above $expected",
+            result.samples.size < expected * 1.2,
+        )
     }
 
     /** mp3 goes through a real codec rather than the raw-PCM path. */
@@ -129,6 +141,41 @@ class WhisperPipelineTest {
         val out = File(appContext.cacheDir, "synth_${sampleRate}_${channels}ch_${seconds}s.wav")
         out.writeBytes(buf.array())
         return Uri.fromFile(out)
+    }
+
+    /**
+     * The decisive memory case. A 40-minute episode decodes to ~38.5M float
+     * samples in ONE array — 154 MB. Everything about the buffer strategy
+     * (pre-sizing from the container duration, 1.25x growth, handing back the
+     * backing array instead of a trimmed copy) exists for this test, and none of
+     * it is exercised by an 11-second clip.
+     *
+     * Needs audio/reference.mp3 on the device: ./tools/fetch-audio.sh
+     */
+    @Test
+    fun decodesFortyMinuteEpisodeWithoutOom() {
+        val file = File(appContext.getExternalFilesDir(null), "reference.mp3")
+        assumeTrue("no reference.mp3 on device — run ./tools/fetch-audio.sh", file.exists())
+
+        val result = AudioDecoder.decode(appContext, Uri.fromFile(file))
+
+        assertTrue(
+            "expected a long episode, got ${result.durationSec}s",
+            result.durationSec > 600,
+        )
+        assertEquals("reference is 44.1 kHz", 44_100, result.sourceSampleRate)
+        assertEquals("reference is stereo", 2, result.sourceChannels)
+
+        // Pre-sizing must hold: a backing array much larger than the audio means
+        // the buffer grew, which is the allocation spike this is guarding against.
+        assertTrue(
+            "backing array ${result.samples.size} vs ${result.sampleCount} samples — buffer grew",
+            result.samples.size < result.sampleCount * 1.1,
+        )
+        assertTrue(
+            "audio should not be silent",
+            (0 until result.sampleCount step 10_000).any { kotlin.math.abs(result.samples[it]) > 0.01f },
+        )
     }
 
     // --- model import -------------------------------------------------------
@@ -208,6 +255,7 @@ class WhisperPipelineTest {
             WhisperNative.transcribe(
                 ptr = ptr,
                 audio = pcm.samples,
+                nSamples = pcm.sampleCount,
                 nThreads = 4,
                 language = "en",
                 tokenTimestamps = true,
