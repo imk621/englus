@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -45,6 +46,7 @@ import com.englus.app.data.TranscriptState
 @Composable
 fun LibraryScreen(
     onOpen: (Episode) -> Unit,
+    onPodcasts: () -> Unit,
     vm: LibraryViewModel = viewModel(),
 ) {
     val episodes by vm.episodes.collectAsStateWithLifecycle()
@@ -61,7 +63,16 @@ fun LibraryScreen(
     ) { uri -> uri?.let(vm::importModel) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("englus") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("englus") },
+                actions = {
+                    IconButton(onClick = onPodcasts) {
+                        Icon(Icons.Default.Podcasts, "팟캐스트")
+                    }
+                },
+            )
+        },
         floatingActionButton = {
             if (ui.models.isNotEmpty()) {
                 ExtendedFloatingActionButton(

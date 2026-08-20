@@ -21,6 +21,9 @@ import androidx.navigation.NavType
 import com.englus.app.ui.library.LibraryScreen
 import com.englus.app.ui.player.PlayerScreen
 import com.englus.app.ui.player.PlayerViewModel
+import com.englus.app.ui.podcast.PodcastScreen
+import com.englus.app.ui.podcast.PodcastViewModel
+import com.englus.app.ui.podcast.SubscriptionsScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,7 +49,29 @@ private fun Root() {
 
     NavHost(navController = nav, startDestination = "library") {
         composable("library") {
-            LibraryScreen(onOpen = { nav.navigate("player/${it.id}") })
+            LibraryScreen(
+                onOpen = { nav.navigate("player/${it.id}") },
+                onPodcasts = { nav.navigate("podcasts") },
+            )
+        }
+        composable("podcasts") {
+            SubscriptionsScreen(
+                onOpen = { nav.navigate("podcast/$it") },
+                onBack = { nav.popBackStack() },
+            )
+        }
+        composable(
+            "podcast/{podcastId}",
+            arguments = listOf(navArgument("podcastId") { type = NavType.LongType }),
+        ) { entry ->
+            val id = entry.arguments?.getLong("podcastId") ?: return@composable
+            val app = androidx.compose.ui.platform.LocalContext.current.applicationContext
+                    as android.app.Application
+            val vm: PodcastViewModel = viewModel(
+                key = "podcast-$id",
+                factory = viewModelFactory { initializer { PodcastViewModel(app, id) } },
+            )
+            PodcastScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable(
             "player/{episodeId}",
