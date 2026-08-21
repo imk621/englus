@@ -62,7 +62,7 @@ import com.englus.app.dictation.DiffStatus
 @Composable
 fun ShadowingScreen(vm: ShadowingViewModel, onBack: () -> Unit) {
     val ui by vm.ui.collectAsStateWithLifecycle()
-    val sentences by vm.sentences.collectAsStateWithLifecycle()
+    val items by vm.items.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var granted by remember {
@@ -78,7 +78,12 @@ fun ShadowingScreen(vm: ShadowingViewModel, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("쉐도잉  ${ui.index + 1} / ${ui.total}") },
+                title = {
+                    Text(
+                        (if (ui.savedMode) "놓친 문장  " else "쉐도잉  ") +
+                            "${ui.index + 1} / ${ui.total}"
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "뒤로") }
                 },
@@ -95,7 +100,12 @@ fun ShadowingScreen(vm: ShadowingViewModel, onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (ui.finished) {
-                Text("이 에피소드를 끝냈습니다.", fontWeight = FontWeight.Bold)
+                Text(
+                    if (ui.total == 0) "따라 말할 문장이 없습니다."
+                    else if (ui.savedMode) "놓친 문장을 다 끝냈습니다."
+                    else "이 에피소드를 끝냈습니다.",
+                    fontWeight = FontWeight.Bold,
+                )
                 Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("돌아가기") }
                 return@Column
             }
@@ -121,16 +131,22 @@ fun ShadowingScreen(vm: ShadowingViewModel, onBack: () -> Unit) {
                 )
             }
 
-            val sentence = sentences.getOrNull(ui.index)
+            val item = items.getOrNull(ui.index)
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("따라 말할 문장", fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // In the saved queue the sentences come from different
+                    // episodes, so the source has to be named per sentence.
+                    Text(
+                        if (ui.savedMode) item?.episodeTitle.orEmpty().ifBlank { "따라 말할 문장" }
+                        else "따라 말할 문장",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     Spacer(Modifier.height(4.dp))
                     // The text is visible here, unlike dictation: shadowing trains
                     // production, not perception, and hiding it would just be a
                     // memory test.
-                    Text(sentence?.text.orEmpty(), fontSize = 17.sp)
+                    Text(item?.sentence?.text.orEmpty(), fontSize = 17.sp)
                 }
             }
 

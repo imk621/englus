@@ -28,6 +28,8 @@ data class SpeakingHomeUi(
     val modelReady: Boolean = true,
     val liveConfigured: Boolean = false,
     val liveEnabled: Boolean = false,
+    /** Saved sentences that still have audio to imitate. */
+    val missedCount: Int = 0,
 )
 
 /**
@@ -49,7 +51,8 @@ class SpeakingHomeViewModel(app: Application) : AndroidViewModel(app) {
         db.speaking().observeProgress(),
         db.speaking().observeCount(),
         db.speaking().observeOverallAverage(),
-    ) { episodes, progress, count, average ->
+        db.dictation().observeSaved(),
+    ) { episodes, progress, count, average, saved ->
         val byEpisode = progress.associateBy { it.episodeId }
         SpeakingHomeUi(
             // Shadowing needs audio to imitate, so reading material is not a
@@ -65,6 +68,11 @@ class SpeakingHomeViewModel(app: Application) : AndroidViewModel(app) {
             modelReady = models.available().isNotEmpty(),
             liveConfigured = live.configured,
             liveEnabled = live.budget.dailyMinutes > 0,
+            // A saved sentence with no audio, or no timing, has nothing to
+            // imitate - counting it would promise a queue that opens empty.
+            missedCount = saved.count {
+                it.audioPath.isNotBlank() && it.sentence.endMs > it.sentence.startMs
+            },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SpeakingHomeUi())
 }

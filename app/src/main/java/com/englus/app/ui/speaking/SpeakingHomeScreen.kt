@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 fun SpeakingHomeScreen(
     vm: SpeakingHomeViewModel,
     onShadow: (Long) -> Unit,
+    onShadowMissed: () -> Unit,
     onLive: () -> Unit,
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
@@ -50,6 +51,10 @@ fun SpeakingHomeScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { ShadowingIntro(ui) }
+
+            if (ui.missedCount > 0) {
+                item { MissedCard(ui.missedCount, onShadowMissed) }
+            }
 
             if (!ui.modelReady) {
                 item {
@@ -121,6 +126,33 @@ fun SpeakingHomeScreen(
             }
 
             item { LiveCard(ui, onLive) }
+        }
+    }
+}
+
+/**
+ * The queue worth doing first.
+ *
+ * Walking an episode from sentence one spends most of the session on lines that
+ * were already easy. The app has known all along which sentences were failed;
+ * saying those out loud is where the time goes furthest.
+ */
+@Composable
+private fun MissedCard(count: Int, onClick: () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        ),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text("놓친 문장 ${count}개 따라 말하기", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "받아쓰기에서 틀렸거나 직접 저장한 문장만 모아 따라 말합니다. " +
+                    "에피소드를 처음부터 훑으면 이미 쉬웠던 문장에 시간을 다 씁니다.",
+                fontSize = 12.sp,
+            )
         }
     }
 }

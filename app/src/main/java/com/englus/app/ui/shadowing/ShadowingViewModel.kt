@@ -31,6 +31,13 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 
+/** One sentence to shadow, with the audio it came from. */
+data class ShadowItem(
+    val sentence: Sentence,
+    val audioPath: String,
+    val episodeTitle: String,
+)
+
 data class ShadowUi(
     val index: Int = 0,
     val total: Int = 0,
@@ -43,6 +50,9 @@ data class ShadowUi(
     val error: String? = null,
     val finished: Boolean = false,
     val modelMissing: Boolean = false,
+    /** True when the queue is the learner's own missed sentences rather than an episode. */
+    val savedMode: Boolean = false,
+    val episodeTitle: String = "",
 )
 
 /**
@@ -52,9 +62,21 @@ data class ShadowUi(
  * learner, so the comparison is like for like — no cloud round trip, no separate
  * pronunciation service, and it works offline.
  */
+/**
+ * Shadowing, over an episode or over the sentences the learner actually missed.
+ *
+ * The second mode is the one that earns its keep. Walking an episode from
+ * sentence one spends most of the session on lines that were already easy; the
+ * app has known all along which sentences were failed, and those are the ones
+ * worth saying out loud. It is the same argument the sound drills already make,
+ * applied to speaking.
+ *
+ * A saved queue crosses episodes, so the audio file changes between sentences
+ * and the player is loaded per item rather than once at the start.
+ */
 class ShadowingViewModel(
     app: Application,
-    private val episodeId: Long,
+    private val episodeId: Long?,
     startPosition: Int,
 ) : AndroidViewModel(app) {
 
@@ -62,18 +84,21 @@ class ShadowingViewModel(
     private val models = (app as EnglusApp).models
     private val speakingDao = EnglusDatabase.get(app).speaking()
     private val episodeDao = EnglusDatabase.get(app).episodes()
+    private val dictationDao = EnglusDatabase.get(app).dictation()
 
     private val syncOffsetMs =
         app.getSharedPreferences("player", Application.MODE_PRIVATE).getInt("syncOffsetMs", 0)
 
-    val sentences: StateFlow<List<Sentence>> =
-        repo.observeSentences(episodeId)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val _items = MutableStateFlow<List<ShadowItem>>(emptyList())
+    val items: StateFlow<List<ShadowItem>> = _items.asStateFlow()
 
-    private val _ui = MutableStateFlow(ShadowUi(index = startPosition))
+    private val _ui = MutableStateFlow(
+        ShadowUi(index = if (episodeId == null) 0 else startPosition, savedMode = episodeId == null)
+    )
     val ui: StateFlow<ShadowUi> = _ui.asStateFlow()
 
     val player: ExoPlayer = ExoPlayer.Builder(app).build()
+    private var loadedPath: String? = null
     private var clipEndMs = Long.MAX_VALUE
 
     private var recorder: MediaRecorder? = null
@@ -88,13 +113,7 @@ class ShadowingViewModel(
 
     init {
         viewModelScope.launch {
-            val episode = episodeDao.get(episodeId) ?: return@launch
-            player.setMediaItem(MediaItem.fromUri(Uri.fromFile(File(episode.audioPath))))
-            player.prepare()
-
-            val list = sentences.first { it.isNotEmpty() }
-            _ui.update { it.copy(total = list.size, index = startPosition.coerceIn(0, list.lastIndex)) }
-            playCurrent()
+            if (episodeId == null) loadSaved() else loadEpisode(startPosition)
 
             val model = models.preferred()
             if (model == null) {
@@ -110,7 +129,35 @@ class ShadowingViewModel(
         viewModelScope.launch { watchClipEnd() }
     }
 
-    private fun current(): Sentence? = sentences.value.getOrNull(_ui.value.index)
+    private suspend fun loadEpisode(startPosition: Int) {
+        val episode = episodeDao.get(episodeId ?: return) ?: return
+        val list = repo.observeSentences(episode.id).first { it.isNotEmpty() }
+        _items.value = list.map { ShadowItem(it, episode.audioPath, episode.title) }
+        _ui.update {
+            it.copy(
+                total = list.size,
+                index = startPosition.coerceIn(0, list.lastIndex),
+                episodeTitle = episode.title,
+            )
+        }
+        playCurrent()
+    }
+
+    /**
+     * Only sentences that still have audio. A saved sentence from reading
+     * material, or from an episode restored without its audio, has nothing to
+     * imitate - putting it in the queue would just be a dead screen.
+     */
+    private suspend fun loadSaved() {
+        val saved = dictationDao.observeSaved().first()
+            .filter { it.audioPath.isNotBlank() && it.sentence.endMs > it.sentence.startMs }
+            .map { ShadowItem(it.sentence, it.audioPath, it.episodeTitle) }
+        _items.value = saved
+        _ui.update { it.copy(total = saved.size, index = 0, finished = saved.isEmpty()) }
+        if (saved.isNotEmpty()) playCurrent()
+    }
+
+    private fun current(): Sentence? = _items.value.getOrNull(_ui.value.index)?.sentence
 
     private suspend fun watchClipEnd() {
         while (true) {
@@ -121,7 +168,17 @@ class ShadowingViewModel(
     }
 
     fun playCurrent() {
-        val s = current() ?: return
+        val item = _items.value.getOrNull(_ui.value.index) ?: return
+        val file = File(item.audioPath)
+        if (!file.exists()) return
+        // The saved queue crosses episodes, so the file can change between one
+        // sentence and the next.
+        if (loadedPath != item.audioPath) {
+            player.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
+            player.prepare()
+            loadedPath = item.audioPath
+        }
+        val s = item.sentence
         clipEndMs = s.endMs + syncOffsetMs + TAIL_PAD_MS
         player.playbackParameters = PlaybackParameters(1f)
         player.seekTo((s.startMs + syncOffsetMs - HEAD_PAD_MS).coerceAtLeast(0))
@@ -189,7 +246,7 @@ class ShadowingViewModel(
                 speakingDao.insert(
                     SpeakingAttempt(
                         sentenceId = sentence.id,
-                        episodeId = episodeId,
+                        episodeId = sentence.episodeId,
                         accuracy = diff.accuracy,
                         recognizedText = recognized,
                         targetText = sentence.text,
@@ -234,7 +291,7 @@ class ShadowingViewModel(
     }
 
     fun next() {
-        val list = sentences.value
+        val list = _items.value
         val nextIndex = _ui.value.index + 1
         if (nextIndex > list.lastIndex) {
             player.pause()

@@ -164,6 +164,7 @@ private fun Root() {
                 SpeakingHomeScreen(
                     vm = vm,
                     onShadow = { episodeId -> nav.navigate("shadowing/$episodeId/0") },
+                    onShadowMissed = { nav.navigate("shadowing/saved") },
                     onLive = { nav.navigate("live") },
                 )
             }
@@ -351,6 +352,18 @@ private fun Root() {
                     factory = viewModelFactory { initializer { ExamViewModel(application, id) } },
                 )
                 ExamScreen(vm = vm, onBack = { nav.popBackStack() })
+            }
+            // Declared before the parameterised route so "saved" is not swallowed
+            // as an episode id.
+            composable("shadowing/saved") {
+                val application = app()
+                val vm: ShadowingViewModel = viewModel(
+                    key = "shadowing-saved",
+                    factory = viewModelFactory {
+                        initializer { ShadowingViewModel(application, null, 0) }
+                    },
+                )
+                ShadowingScreen(vm = vm, onBack = { nav.popBackStack() })
             }
             composable(
                 "shadowing/{episodeId}/{position}",
