@@ -127,7 +127,15 @@ fun LiveScreen(
                             },
                             enabled = ui.remainingSec > 0 && ui.topic != null,
                             modifier = Modifier.fillMaxWidth(),
-                        ) { Text(if (ui.remainingSec > 0) "대화 시작" else "오늘 시간 소진") }
+                        ) {
+                            Text(
+                                when {
+                                    ui.dailyMinutes == 0 -> "먼저 하루 한도를 정하세요"
+                                    ui.remainingSec > 0 -> "대화 시작"
+                                    else -> "오늘 시간 소진"
+                                }
+                            )
+                        }
                     }
                     item { HistorySection(vm) }
                 }
@@ -200,13 +208,23 @@ private fun CostCard(ui: LiveUi, vm: LiveViewModel) {
         ),
     ) {
         Column(Modifier.padding(16.dp)) {
-            Text("오늘 남은 시간 ${ui.remainingSec / 60}분 ${ui.remainingSec % 60}초",
-                fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(
+                if (ui.dailyMinutes == 0) "꺼져 있습니다"
+                else "오늘 남은 시간 ${ui.remainingSec / 60}분 ${ui.remainingSec % 60}초",
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+            )
             Spacer(Modifier.height(4.dp))
             Text(
-                "음성은 오가는 양만큼 과금됩니다. 말하는 동안 계속 흐르기 때문에 " +
-                    "끊는 것을 잊는 것이 가장 흔한 사고입니다. 그래서 하루 한도를 앱 안에서 " +
-                    "강제하고, 1초 단위로 미리 차감합니다.",
+                if (ui.dailyMinutes == 0) {
+                    "이 기능은 기본으로 꺼져 있습니다. 앱에서 유일하게 실제로 요금이 " +
+                        "나가는 기능이라, 쓰겠다고 정하기 전에는 켜지지 않는 편이 맞습니다. " +
+                        "아래에서 하루 한도를 고르면 켜집니다."
+                } else {
+                    "음성은 오가는 양만큼 과금됩니다. 말하는 동안 계속 흐르기 때문에 " +
+                        "끊는 것을 잊는 것이 가장 흔한 사고입니다. 그래서 하루 한도를 앱 안에서 " +
+                        "강제하고, 1초 단위로 미리 차감합니다."
+                },
                 fontSize = 11.sp,
             )
             Spacer(Modifier.height(10.dp))

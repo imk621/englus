@@ -235,6 +235,24 @@ interface SpeakingDao {
 
     @Query("SELECT * FROM speaking_attempts WHERE sentenceId = :sentenceId ORDER BY attemptedAt DESC LIMIT 1")
     suspend fun latestFor(sentenceId: Long): SpeakingAttempt?
+
+    /**
+     * Practice so far, per episode, in one query.
+     *
+     * The speaking home lists every episode; asking for an average per row would
+     * be one query per item and would re-run on every recomposition.
+     */
+    @Query(
+        """
+        SELECT episodeId, COUNT(*) AS attempts, AVG(accuracy) AS average
+        FROM speaking_attempts
+        GROUP BY episodeId
+        """
+    )
+    fun observeProgress(): Flow<List<SpeakingProgress>>
+
+    @Query("SELECT AVG(accuracy) FROM speaking_attempts")
+    fun observeOverallAverage(): Flow<Float?>
 }
 
 @Dao

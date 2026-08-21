@@ -60,9 +60,16 @@ class LiveBudget(context: Context) {
         const val KEY_SPENT = "spentSeconds"
 
         /**
-         * Ten minutes. Long enough for a real conversation, short enough that
+         * Off until asked for.
+         *
+         * This is the only feature in the app that spends money, and it was
+         * armed out of the box with ten minutes a day. A paid feature that is
+         * on by default is one someone can start paying for without ever having
+         * decided to. Ten minutes is still the first thing offered once they do
+         * decide - long enough for a real conversation, short enough that
          * forgetting to hang up is an annoyance rather than an expense.
          */
-        const val DEFAULT_MINUTES = 10
+        const val DEFAULT_MINUTES = 0
+        const val SUGGESTED_MINUTES = 10
     }
 }

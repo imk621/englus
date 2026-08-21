@@ -43,3 +43,10 @@ data class SpeakingAttempt(
     val paceRatio: Float
         get() = if (targetMs <= 0) 1f else spokenMs.toFloat() / targetMs
 }
+
+/** Shadowing done so far on one episode. */
+data class SpeakingProgress(
+    val episodeId: Long,
+    val attempts: Int,
+    val average: Float,
+)

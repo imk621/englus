@@ -54,6 +54,8 @@ import com.englus.app.ui.reading.ReadingCaptureScreen
 import com.englus.app.ui.review.ReviewScreen
 import com.englus.app.ui.settings.SettingsScreen
 import com.englus.app.ui.shadowing.ShadowingScreen
+import com.englus.app.ui.speaking.SpeakingHomeScreen
+import com.englus.app.ui.speaking.SpeakingHomeViewModel
 import com.englus.app.ui.shadowing.ShadowingViewModel
 import com.englus.app.ui.exam.ExamScreen
 import com.englus.app.ui.quality.TranscriptCheckScreen
@@ -84,10 +86,10 @@ class MainActivity : ComponentActivity() {
 private enum class Tab(val route: String, val label: String, val icon: ImageVector) {
     LISTENING("tab/listening", "듣기", Icons.Default.Headphones),
     /**
-     * Speaking is the second priority of this app and until now had no home of
-     * its own - shadowing was reachable only from inside a player. Live
-     * conversation is the part that does not belong to any one episode, so it
-     * gets the tab.
+     * Speaking is the second priority of this app and had no home of its own -
+     * shadowing was reachable only from inside a player. The tab leads with
+     * shadowing because that is the free half; live conversation is an option
+     * inside it, not the thing the tab is for.
      */
     SPEAKING("tab/speaking", "말하기", Icons.Default.Mic),
     READING("tab/reading", "읽기", Icons.Default.MenuBook),
@@ -153,14 +155,25 @@ private fun Root() {
             }
             composable(Tab.SPEAKING.route) {
                 val application = app()
+                val vm: SpeakingHomeViewModel = viewModel(
+                    key = "speaking",
+                    factory = viewModelFactory { initializer { SpeakingHomeViewModel(application) } },
+                )
+                SpeakingHomeScreen(
+                    vm = vm,
+                    onShadow = { episodeId -> nav.navigate("shadowing/$episodeId/0") },
+                    onLive = { nav.navigate("live") },
+                )
+            }
+            composable("live") {
+                val application = app()
                 val vm: LiveViewModel = viewModel(
                     key = "live",
                     factory = viewModelFactory { initializer { LiveViewModel(application) } },
                 )
                 LiveScreen(
                     vm = vm,
-                    showBack = false,
-                    onBack = {},
+                    onBack = { nav.popBackStack() },
                     onOpenSettings = { nav.navigate("settings") },
                 )
             }
