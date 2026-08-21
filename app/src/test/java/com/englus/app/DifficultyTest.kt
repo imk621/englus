@@ -125,6 +125,39 @@ class DifficultyTest {
         assertEquals(1500, VocabRepository.estimateSize(enough))
     }
 
+    /**
+     * SQL cannot see inflections, so the search has to be widened before it is
+     * narrowed: "study" does not occur inside "studies", and "hope" does not
+     * occur inside "hoping". Getting this wrong makes the word screen silently
+     * find nothing for exactly the words most likely to have been missed.
+     */
+    @Test
+    fun searchStemSurvivesTheSpellingChangesInflectionCauses() {
+        assertEquals("stud", VocabRepository.searchStem("study"))
+        assertEquals("hop", VocabRepository.searchStem("hope"))
+
+        // Everything else keeps the lemma as a prefix, so it is left alone.
+        assertEquals("market", VocabRepository.searchStem("market"))
+        assertEquals("run", VocabRepository.searchStem("run"))
+
+        // Short words are not trimmed: "the" -> "th" would match half the corpus.
+        assertEquals("the", VocabRepository.searchStem("the"))
+        assertEquals("be", VocabRepository.searchStem("be"))
+    }
+
+    @Test
+    fun searchStemActuallyMatchesTheFormsItIsMeantTo() {
+        fun matches(lemma: String, surface: String) =
+            surface.contains(VocabRepository.searchStem(lemma))
+
+        assertTrue(matches("study", "studies"))
+        assertTrue(matches("study", "studied"))
+        assertTrue(matches("hope", "hoping"))
+        assertTrue(matches("hope", "hoped"))
+        assertTrue(matches("market", "markets"))
+        assertTrue(matches("run", "running"))
+    }
+
     @Test
     fun evidenceRulesNeedTwoCleanHitsAndRespectAHandJudgement() {
         assertEquals(VocabState.UNKNOWN, VocabRepository.stateFor(correct = 0, missed = 1, manual = 0))

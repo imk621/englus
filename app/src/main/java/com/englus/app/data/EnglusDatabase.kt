@@ -378,6 +378,31 @@ interface VocabDao {
 
     @Query("UPDATE vocab_words SET state = :state, manual = :manual WHERE lemma = :lemma")
     suspend fun setManual(lemma: String, state: VocabState, manual: Int)
+
+    @Query("SELECT * FROM vocab_words WHERE lemma = :lemma")
+    suspend fun word(lemma: String): VocabWord?
+
+    /**
+     * Candidate sentences containing a word, with the audio needed to replay them.
+     *
+     * LIKE on a stem rather than the lemma, because SQL cannot see inflections:
+     * "study" does not occur inside "studies". The pattern deliberately
+     * over-matches and the caller discards the false hits by lemmatising each
+     * token, which is the only place that comparison can be made correctly.
+     */
+    @Query(
+        """
+        SELECT s.*, e.title AS episodeTitle, e.audioPath AS audioPath,
+          (SELECT d.diagnosis FROM dictation_attempts d
+             WHERE d.sentenceId = s.id ORDER BY d.attemptedAt DESC LIMIT 1) AS lastDiagnosis
+        FROM sentences s
+        JOIN episodes e ON e.id = s.episodeId
+        WHERE s.text LIKE :pattern
+        ORDER BY s.saved DESC, s.episodeId, s.position
+        LIMIT :limit
+        """
+    )
+    suspend fun sentencesContaining(pattern: String, limit: Int = 200): List<SavedSentence>
 }
 
 @Dao

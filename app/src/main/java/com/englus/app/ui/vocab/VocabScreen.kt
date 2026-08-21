@@ -46,10 +46,11 @@ import com.englus.app.vocab.Band
 import com.englus.app.vocab.Cefr
 import com.englus.app.vocab.VocabRepository
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VocabScreen(vm: VocabViewModel, onBack: () -> Unit) {
+fun VocabScreen(vm: VocabViewModel, onBack: () -> Unit, onWord: (String) -> Unit) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val unknown by vm.unknownWords.collectAsStateWithLifecycle()
 
@@ -92,7 +93,7 @@ fun VocabScreen(vm: VocabViewModel, onBack: () -> Unit) {
                 }
                 items(unknown.size) { i ->
                     val w = unknown[i]
-                    Card(Modifier.fillMaxWidth()) {
+                    Card(Modifier.fillMaxWidth().clickable { onWord(w.lemma) }) {
                         Row(
                             Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -105,6 +106,8 @@ fun VocabScreen(vm: VocabViewModel, onBack: () -> Unit) {
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
+                            // Dismissing stays one tap; the row itself now leads
+                            // to the sentences the word was actually met in.
                             TextButton(onClick = { vm.markKnown(w.lemma, true) }) {
                                 Text("알아요", fontSize = 12.sp)
                             }

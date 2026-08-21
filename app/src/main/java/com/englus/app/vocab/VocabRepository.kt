@@ -4,6 +4,7 @@ import android.content.Context
 import com.englus.app.data.EnglusDatabase
 import com.englus.app.data.VocabBandStat
 import com.englus.app.data.VocabState
+import com.englus.app.data.SavedSentence
 import com.englus.app.data.VocabWord
 import com.englus.app.dictation.DiffResult
 import com.englus.app.dictation.DiffStatus
@@ -108,6 +109,32 @@ class VocabRepository(private val context: Context) {
         )
     }
 
+    /**
+     * The sentences this word was actually met in.
+     *
+     * The point of the vocabulary profile is to send the learner back to their
+     * own material, not to a word list. A word met again in the sentence and the
+     * voice that defeated it the first time is being learned where it will next
+     * be needed; the same word on a flashcard is being learned nowhere.
+     *
+     * Matching is done here rather than in SQL because only here can inflections
+     * be resolved: the query casts a wide net with a stem, and every candidate
+     * is then checked token by token against the lemma.
+     */
+    suspend fun sentencesFor(lemma: String, limit: Int = 12): List<SavedSentence> =
+        withContext(Dispatchers.IO) {
+            val candidates = dao.sentencesContaining("%${searchStem(lemma)}%")
+            withContext(Dispatchers.Default) {
+                candidates
+                    .filter { row ->
+                        Lemmatizer.tokenize(row.sentence.text).any { lemmatizer.lemma(it) == lemma }
+                    }
+                    .take(limit)
+            }
+        }
+
+    suspend fun word(lemma: String) = withContext(Dispatchers.IO) { dao.word(lemma) }
+
     suspend fun setKnown(lemma: String, known: Boolean) = withContext(Dispatchers.IO) {
         dao.setManual(
             lemma,
@@ -202,6 +229,21 @@ class VocabRepository(private val context: Context) {
 
         /** A band needs this many met words before its known ratio means anything. */
         const val MIN_MET_PER_BAND = 15
+
+        /**
+         * The prefix to hand SQL, wide enough to survive spelling changes.
+         *
+         * A final "y" becomes "ie" before an ending ("study" -> "studies") and a
+         * final "e" is dropped before one ("hope" -> "hoping"), so searching for
+         * the lemma itself would miss exactly the forms most likely to appear.
+         * Every other inflection keeps the lemma as a prefix.
+         */
+        fun searchStem(lemma: String): String =
+            if (lemma.length > 3 && (lemma.endsWith("y") || lemma.endsWith("e"))) {
+                lemma.dropLast(1)
+            } else {
+                lemma
+            }
 
         /**
          * Extrapolates a vocabulary size from the bands with enough evidence.

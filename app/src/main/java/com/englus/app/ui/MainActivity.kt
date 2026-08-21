@@ -67,6 +67,8 @@ import com.englus.app.ui.sound.SoundPatternListScreen
 import com.englus.app.ui.srs.ReviewSessionScreen
 import com.englus.app.ui.vocab.VocabScreen
 import com.englus.app.ui.vocab.VocabViewModel
+import com.englus.app.ui.vocab.WordScreen
+import com.englus.app.ui.vocab.WordViewModel
 import com.englus.app.ui.writing.WritingScreen
 
 class MainActivity : ComponentActivity() {
@@ -211,7 +213,29 @@ private fun Root() {
                     key = "vocab",
                     factory = viewModelFactory { initializer { VocabViewModel(application) } },
                 )
-                VocabScreen(vm = vm, onBack = { nav.popBackStack() })
+                VocabScreen(
+                    vm = vm,
+                    onBack = { nav.popBackStack() },
+                    onWord = { lemma -> nav.navigate("word/$lemma") },
+                )
+            }
+            composable(
+                "word/{lemma}",
+                arguments = listOf(navArgument("lemma") { type = NavType.StringType }),
+            ) { e ->
+                val lemma = e.arguments?.getString("lemma") ?: return@composable
+                val application = app()
+                val vm: WordViewModel = viewModel(
+                    key = "word-$lemma",
+                    factory = viewModelFactory { initializer { WordViewModel(application, lemma) } },
+                )
+                WordScreen(
+                    vm = vm,
+                    onBack = { nav.popBackStack() },
+                    onDictate = { episodeId, position ->
+                        nav.navigate("dictation/$episodeId/$position")
+                    },
+                )
             }
             composable("sound") {
                 val application = app()

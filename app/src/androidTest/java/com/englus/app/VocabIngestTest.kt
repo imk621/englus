@@ -138,6 +138,59 @@ class VocabIngestTest {
         assertTrue("the was not in the first band", stats.any { it.band == 0 })
     }
 
+    /**
+     * The half of the vocabulary profile that turns a measurement into practice:
+     * an unknown word has to lead back to the sentences it was met in, including
+     * the ones where it appears in a different form.
+     */
+    @Test
+    fun findsTheSentencesAWordWasMetIn() = runBlocking {
+        val episodes = EnglusDatabase.get(context).episodes()
+        val id = episodes.insert(
+            com.englus.app.data.Episode(
+                title = "word-lookup-${System.nanoTime()}",
+                audioPath = "",
+                importedAt = 1,
+                state = com.englus.app.data.TranscriptState.DONE,
+            )
+        )
+        episodes.insertSentences(
+            listOf(
+                "She studies the market every morning",
+                "He is hoping for a better price",
+                "They walked to the shop",
+            ).mapIndexed { i, text ->
+                com.englus.app.data.Sentence(
+                    episodeId = id, position = i, text = text,
+                    startMs = 0, endMs = 1000, words = emptyList(),
+                )
+            }
+        )
+
+        // "studies" in the text, "study" in the profile: the whole point.
+        val forStudy = repo.sentencesFor("study")
+        assertTrue(
+            "inflected form not found: ${forStudy.map { it.sentence.text }}",
+            forStudy.any { it.sentence.text.contains("studies") },
+        )
+
+        // "hope" does not occur inside "hoping" as a substring.
+        val forHope = repo.sentencesFor("hope")
+        assertTrue(
+            "e-dropping form not found: ${forHope.map { it.sentence.text }}",
+            forHope.any { it.sentence.text.contains("hoping") },
+        )
+
+        // The widened search must not leak: "shop" shares letters with "hop".
+        assertTrue(
+            "unrelated sentence matched",
+            repo.sentencesFor("hope").none { it.sentence.text.contains("walked to the shop") },
+        )
+
+        assertTrue("a word not present returned rows", repo.sentencesFor("zebra").isEmpty())
+        episodes.delete(id)
+    }
+
     @Test
     fun tokenizerAndLemmatizerAgreeOnRealSentences() {
         val lem = Lemmatizer(FrequencyList.get(context))
