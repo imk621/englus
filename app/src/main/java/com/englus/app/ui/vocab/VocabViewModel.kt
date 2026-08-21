@@ -37,6 +37,13 @@ data class VocabUi(
     val scanning: Boolean = false,
     /** True when the library held more episodes than [MAX_SCANNED]. */
     val truncated: Boolean = false,
+    /**
+     * Set once a scan has finished. Without it an empty result is
+     * indistinguishable from a button that did nothing.
+     */
+    val scanned: Boolean = false,
+    /** Episodes skipped because there was not enough text to measure. */
+    val tooShort: Int = 0,
 )
 
 class VocabViewModel(app: Application) : AndroidViewModel(app) {
@@ -87,16 +94,23 @@ class VocabViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val all = episodes.observeAll().first().filter { it.state == TranscriptState.DONE }
             val scanned = all.take(MAX_SCANNED)
+            var tooShort = 0
             val results = scanned.mapNotNull { episode ->
                 val sentences = episodes.observeSentences(episode.id).first().map { it.text }
                 if (sentences.isEmpty()) return@mapNotNull null
                 val rate = vocab.unknownRate(sentences)
-                if (rate.totalTokens < VocabRepository.MIN_TOKENS_FOR_ESTIMATE) null
-                else Recommendation(episode, rate)
+                if (rate.totalTokens < VocabRepository.MIN_TOKENS_FOR_ESTIMATE) {
+                    tooShort++
+                    null
+                } else {
+                    Recommendation(episode, rate)
+                }
             }
             _ui.update {
                 it.copy(
                     scanning = false,
+                    scanned = true,
+                    tooShort = tooShort,
                     truncated = all.size > scanned.size,
                     // Closest to the middle of the useful band first: material at
                     // 2-5% unknown teaches without collapsing comprehension.

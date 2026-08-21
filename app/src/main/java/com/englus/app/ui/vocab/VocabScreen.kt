@@ -242,6 +242,22 @@ private fun RecommendCard(ui: VocabUi, vm: VocabViewModel) {
             Spacer(Modifier.height(10.dp))
 
             if (ui.recommendations.isEmpty()) {
+                // Silence after a scan reads as a broken button. Say what was
+                // looked at and why nothing came back.
+                if (ui.scanned && !ui.scanning) {
+                    Text(
+                        if (ui.tooShort > 0) {
+                            "잴 수 있는 자료가 없습니다. ${ui.tooShort}개는 글이 너무 짧아 " +
+                                "건너뛰었습니다 - 문장 몇 개로 낸 비율은 고유명사 하나에 " +
+                                "크게 흔들려 숫자로서 의미가 없습니다."
+                        } else {
+                            "전사가 끝난 자료가 아직 없습니다."
+                        },
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
                 Button(
                     onClick = { vm.scanLibrary() },
                     enabled = !ui.scanning,
@@ -252,7 +268,7 @@ private fun RecommendCard(ui: VocabUi, vm: VocabViewModel) {
                         Spacer(Modifier.width(8.dp))
                         Text("분석 중")
                     } else {
-                        Text("내 자료 분석하기")
+                        Text(if (ui.scanned) "다시 분석하기" else "내 자료 분석하기")
                     }
                 }
             } else {
