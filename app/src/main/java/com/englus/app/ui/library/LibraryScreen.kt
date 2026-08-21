@@ -49,6 +49,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.englus.app.data.Episode
 import com.englus.app.data.EpisodeKind
 import com.englus.app.data.TranscriptState
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -299,6 +304,45 @@ private fun EpisodeCard(
                     fontSize = 12.sp,
                 )
             }
+
+            episode.cefr?.let { cefr ->
+                Spacer(Modifier.height(6.dp))
+                DifficultyChip(cefr, episode.k2Coverage)
+            }
+        }
+    }
+}
+
+/**
+ * The estimated level, shown where the choice is actually made.
+ *
+ * Put on the list rather than inside the episode, because by the time an episode
+ * is open the decision to listen to it has already been taken.
+ */
+@Composable
+private fun DifficultyChip(cefr: String, k2Coverage: Float?) {
+    val label = runCatching { com.englus.app.vocab.Cefr.valueOf(cefr) }.getOrNull()
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .background(MaterialTheme.colorScheme.secondaryContainer)
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+        ) {
+            Text(
+                label?.label ?: cefr,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+        }
+        k2Coverage?.let {
+            Spacer(Modifier.width(6.dp))
+            Text(
+                "흔한 단어 ${(it * 100).toInt()}%",
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

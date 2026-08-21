@@ -288,6 +288,77 @@ interface NoteDao {
 }
 
 @Dao
+interface VocabDao {
+
+    @Query("SELECT * FROM vocab_words WHERE lemma IN (:lemmas)")
+    suspend fun get(lemmas: List<String>): List<VocabWord>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(words: List<VocabWord>)
+
+    @Query("SELECT lemma FROM vocab_words WHERE state = 'KNOWN'")
+    suspend fun knownLemmas(): List<String>
+
+    @Query("SELECT lemma FROM vocab_words WHERE state = 'KNOWN'")
+    fun observeKnownLemmas(): Flow<List<String>>
+
+    @Query("SELECT COUNT(*) FROM vocab_words")
+    fun observeMetCount(): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM vocab_words WHERE state = 'KNOWN'")
+    fun observeKnownCount(): Flow<Int>
+
+    /**
+     * Known/unknown split per frequency band, computed in SQL.
+     *
+     * The CASE mirrors [com.englus.app.vocab.Band]; doing it here rather than in
+     * Kotlin avoids reading every row into memory just to bucket it, and the
+     * profile screen queries this on every change.
+     */
+    @Query(
+        """
+        SELECT
+          CASE
+            WHEN rank = 0 THEN 5
+            WHEN rank <= 1000 THEN 0
+            WHEN rank <= 2000 THEN 1
+            WHEN rank <= 3000 THEN 2
+            WHEN rank <= 5000 THEN 3
+            ELSE 4
+          END AS band,
+          SUM(CASE WHEN state = 'KNOWN' THEN 1 ELSE 0 END) AS known,
+          SUM(CASE WHEN state = 'UNKNOWN' THEN 1 ELSE 0 END) AS unknown,
+          COUNT(*) AS met
+        FROM vocab_words
+        GROUP BY band
+        ORDER BY band
+        """
+    )
+    fun observeBandStats(): Flow<List<VocabBandStat>>
+
+    /**
+     * Unknown words, most frequent first.
+     *
+     * Rank order, not recency: a word in the top 1,000 will be met again within
+     * the hour, and one at rank 9,000 may never come back. Studying in the order
+     * the words were missed spends the same effort for a fraction of the return.
+     * Off-list words (rank 0) sort last.
+     */
+    @Query(
+        """
+        SELECT * FROM vocab_words
+        WHERE state = 'UNKNOWN'
+        ORDER BY CASE WHEN rank = 0 THEN 999999 ELSE rank END
+        LIMIT :limit
+        """
+    )
+    fun observeUnknown(limit: Int = 100): Flow<List<VocabWord>>
+
+    @Query("UPDATE vocab_words SET state = :state, manual = :manual WHERE lemma = :lemma")
+    suspend fun setManual(lemma: String, state: VocabState, manual: Int)
+}
+
+@Dao
 interface FeedDao {
 
     @Query("SELECT * FROM podcasts ORDER BY addedAt DESC")
@@ -341,14 +412,16 @@ interface FeedDao {
         Writing::class, WritingMistake::class,
         SpeakingAttempt::class,
         ExamSession::class, ExamQuestion::class,
+        VocabWord::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
 )
 @TypeConverters(
     Converters::class, FeedConverters::class,
     DictationConverters::class, ReviewConverters::class,
     WritingConverters::class, ExamConverters::class,
+    VocabConverters::class,
 )
 abstract class EnglusDatabase : RoomDatabase() {
 
@@ -360,6 +433,7 @@ abstract class EnglusDatabase : RoomDatabase() {
     abstract fun writings(): WritingDao
     abstract fun speaking(): SpeakingDao
     abstract fun exams(): ExamDao
+    abstract fun vocab(): VocabDao
 
     companion object {
         @Volatile private var instance: EnglusDatabase? = null
@@ -640,12 +714,42 @@ abstract class EnglusDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds the vocabulary profile and per-episode difficulty. Additive.
+         *
+         * The three episode columns are nullable on purpose: episodes already on
+         * the phone were never measured, and null says that, where a default of
+         * zero would claim they are the hardest text in the library.
+         */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `vocab_words` (" +
+                        "`lemma` TEXT NOT NULL, " +
+                        "`rank` INTEGER NOT NULL, " +
+                        "`seen` INTEGER NOT NULL, " +
+                        "`correct` INTEGER NOT NULL, " +
+                        "`missed` INTEGER NOT NULL, " +
+                        "`state` TEXT NOT NULL, " +
+                        "`manual` INTEGER NOT NULL, " +
+                        "`firstSeenAt` INTEGER NOT NULL, " +
+                        "`lastSeenAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`lemma`))"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_vocab_words_rank` ON `vocab_words` (`rank`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_vocab_words_state` ON `vocab_words` (`state`)")
+                db.execSQL("ALTER TABLE `episodes` ADD COLUMN `cefr` TEXT")
+                db.execSQL("ALTER TABLE `episodes` ADD COLUMN `k2Coverage` REAL")
+                db.execSQL("ALTER TABLE `episodes` ADD COLUMN `avgSentenceLen` REAL")
+            }
+        }
+
         fun get(context: Context): EnglusDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 EnglusDatabase::class.java,
                 "englus.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11).build().also { instance = it }
         }
     }
 }

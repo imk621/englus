@@ -60,6 +60,8 @@ import com.englus.app.ui.sound.SoundDrillScreen
 import com.englus.app.ui.sound.SoundDrillViewModel
 import com.englus.app.ui.sound.SoundPatternListScreen
 import com.englus.app.ui.srs.ReviewSessionScreen
+import com.englus.app.ui.vocab.VocabScreen
+import com.englus.app.ui.vocab.VocabViewModel
 import com.englus.app.ui.writing.WritingScreen
 
 class MainActivity : ComponentActivity() {
@@ -162,10 +164,19 @@ private fun Root() {
                     onOpenSettings = { nav.navigate("settings") },
                     onStartSession = { nav.navigate("srs") },
                     onSoundDrills = { nav.navigate("sound") },
+                    onVocab = { nav.navigate("vocab") },
                 )
             }
 
             composable("srs") { ReviewSessionScreen(onBack = { nav.popBackStack() }) }
+            composable("vocab") {
+                val application = app()
+                val vm: VocabViewModel = viewModel(
+                    key = "vocab",
+                    factory = viewModelFactory { initializer { VocabViewModel(application) } },
+                )
+                VocabScreen(vm = vm, onBack = { nav.popBackStack() })
+            }
             composable("sound") {
                 val application = app()
                 val vm: SoundDrillViewModel = viewModel(

@@ -116,6 +116,10 @@ class TranscribeWorker(
             }
             // Only now, when there are sentences to translate.
             (applicationContext as EnglusApp).repository.enqueueTranslation(episodeId)
+            // Difficulty is measured once and stored: the library shows a badge
+            // for every episode, and profiling a 40-minute transcript on each
+            // list render would be thousands of lookups per frame.
+            (applicationContext as EnglusApp).vocab.measureEpisode(episodeId)
             Result.success()
         } catch (e: Throwable) {
             fail(episodeId, e.message ?: e.toString())

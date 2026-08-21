@@ -200,6 +200,8 @@ class ShadowingViewModel(
                 )
                 // A sentence you cannot say is a sentence to come back to.
                 if (diff.accuracy < SAVE_THRESHOLD) repo.setSaved(sentence.id, true)
+                // Positive evidence only: a miss here may be the recogniser's.
+                (getApplication() as EnglusApp).vocab.ingest(diff, correctOnly = true)
             } catch (e: Throwable) {
                 _ui.update { it.copy(scoring = false, error = e.message ?: e.toString()) }
             } finally {

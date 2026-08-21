@@ -10,6 +10,7 @@ import com.englus.app.gemini.WritingRepository
 import com.englus.app.ocr.ReadingRepository
 import com.englus.app.srs.ReminderWorker
 import com.englus.app.srs.SrsRepository
+import com.englus.app.vocab.VocabRepository
 
 /**
  * Manual dependency wiring. A DI framework would earn its keep in a team
@@ -25,6 +26,7 @@ class EnglusApp : Application() {
     val writing: WritingRepository by lazy { WritingRepository(this) }
     val reading: ReadingRepository by lazy { ReadingRepository(this) }
     val exams: ExamRepository by lazy { ExamRepository(this) }
+    val vocab: VocabRepository by lazy { VocabRepository(this) }
 
     override fun onCreate() {
         super.onCreate()

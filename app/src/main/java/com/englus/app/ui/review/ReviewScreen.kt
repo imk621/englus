@@ -50,6 +50,7 @@ fun ReviewScreen(
     onOpenSettings: () -> Unit,
     onStartSession: () -> Unit,
     onSoundDrills: () -> Unit,
+    onVocab: () -> Unit,
     vm: ReviewViewModel = viewModel(),
 ) {
     val items by vm.items.collectAsStateWithLifecycle()
@@ -97,6 +98,26 @@ fun ReviewScreen(
 
             if (logCount >= 20) {
                 item { ScheduleFitCard(ui, logCount, vm) }
+            }
+
+            item {
+                Card(
+                    Modifier.fillMaxWidth().clickable(onClick = onVocab),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    ),
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("어휘 프로필", fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "받아쓰기에서 맞춘 단어와 놓친 단어가 쌓여 만들어집니다. " +
+                                "모르는 단어를 흔한 순서로 보여주고, 가진 자료가 지금 " +
+                                "나에게 맞는 난이도인지 계산합니다.",
+                            fontSize = 12.sp,
+                        )
+                    }
+                }
             }
 
             if (items.isNotEmpty()) {

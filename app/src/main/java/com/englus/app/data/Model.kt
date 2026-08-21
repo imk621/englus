@@ -40,6 +40,16 @@ data class Episode(
     val translationState: TranslationState = TranslationState.NONE,
     @ColumnInfo(defaultValue = "LISTENING")
     val kind: EpisodeKind = EpisodeKind.LISTENING,
+    /**
+     * Estimated difficulty, filled in once the text exists.
+     *
+     * Nullable rather than defaulted: an episode transcribed before this existed
+     * genuinely has no estimate, and a zero would be indistinguishable from a
+     * text measured as impossibly hard.
+     */
+    val cefr: String? = null,
+    val k2Coverage: Float? = null,
+    val avgSentenceLen: Float? = null,
 )
 
 /** One word with the timing that makes karaoke, seek-to-sentence and shadowing possible. */

@@ -66,6 +66,7 @@ class DictationViewModel(
     private val dictationDao = EnglusDatabase.get(app).dictation()
     private val explainRepo = (app as EnglusApp).explain
     private val episodeDao = EnglusDatabase.get(app).episodes()
+    private val vocab = (app as EnglusApp).vocab
 
     /** Shared with the player so a calibrated subtitle offset also trims clips. */
     private val syncOffsetMs =
@@ -190,6 +191,9 @@ class DictationViewModel(
             // learner to bookmark their own failures is exactly the step that gets
             // skipped.
             if (diagnosis != Diagnosis.CORRECT) repo.setSaved(sentence.id, true)
+            // Typed by hand against known audio: the cleanest evidence the app
+            // ever gets about which words this learner actually holds.
+            vocab.ingest(diff)
         }
     }
 

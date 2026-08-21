@@ -77,6 +77,7 @@ class ReadingRepository(private val context: Context) {
             }
         )
         (context.applicationContext as EnglusApp).repository.enqueueTranslation(id)
+        (context.applicationContext as EnglusApp).vocab.measureEpisode(id)
         id
     }
 

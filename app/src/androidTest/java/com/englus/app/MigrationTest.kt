@@ -410,6 +410,55 @@ class MigrationTest {
         }
     }
 
+    /**
+     * The vocabulary profile, plus difficulty on episodes that already exist.
+     *
+     * The three episode columns must arrive nullable. A row transcribed before
+     * this version was never measured, and a defaulted zero would show it in the
+     * library as the hardest text there is.
+     */
+    @Test
+    fun migrate10To11AddsVocabularyAndLeavesOldEpisodesUnmeasured() {
+        helper.createDatabase(TEST_DB, 1).use { db ->
+            db.execSQL(
+                "INSERT INTO episodes (title, audioPath, durationMs, importedAt, state, progress, transcribeMs) " +
+                    "VALUES ('Day001', '/audio/a.mp3', 60000, 1, 'DONE', 1.0, 500)"
+            )
+        }
+        helper.runMigrationsAndValidate(
+            TEST_DB, 10, true,
+            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
+            MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
+        ).close()
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 11, true, MIGRATION_10_11)
+
+        db.query("SELECT title, cefr, k2Coverage, avgSentenceLen FROM episodes").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("Day001", c.getString(0))
+            assertTrue("existing episode was given a difficulty it never had", c.isNull(1))
+            assertTrue("k2Coverage defaulted instead of staying unknown", c.isNull(2))
+            assertTrue("avgSentenceLen defaulted instead of staying unknown", c.isNull(3))
+        }
+
+        db.execSQL(
+            "INSERT INTO vocab_words (lemma, rank, seen, correct, missed, state, manual, firstSeenAt, lastSeenAt) " +
+                "VALUES ('study', 1266, 3, 2, 1, 'KNOWN', 0, 1, 2)"
+        )
+        // The primary key is the lemma, which is what stops the same word being
+        // recorded twice under two inflections.
+        db.execSQL(
+            "INSERT OR REPLACE INTO vocab_words " +
+                "(lemma, rank, seen, correct, missed, state, manual, firstSeenAt, lastSeenAt) " +
+                "VALUES ('study', 1266, 4, 3, 1, 'KNOWN', 0, 1, 3)"
+        )
+        db.query("SELECT COUNT(*), MAX(seen) FROM vocab_words WHERE lemma = 'study'").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("lemma duplicated", 1, c.getInt(0))
+            assertEquals("upsert did not update", 4, c.getInt(1))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
         val MIGRATION_1_2 = EnglusDatabase.MIGRATION_1_2
@@ -421,5 +470,6 @@ class MigrationTest {
         val MIGRATION_7_8 = EnglusDatabase.MIGRATION_7_8
         val MIGRATION_8_9 = EnglusDatabase.MIGRATION_8_9
         val MIGRATION_9_10 = EnglusDatabase.MIGRATION_9_10
+        val MIGRATION_10_11 = EnglusDatabase.MIGRATION_10_11
     }
 }

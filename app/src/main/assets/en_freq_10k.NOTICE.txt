@@ -1,0 +1,9 @@
+en_freq_10k.txt — top 10,000 English words by frequency, rank order.
+
+Derived from hermitdave/FrequencyWords (2018 English list), which is built from
+OpenSubtitles and distributed under the MIT License.
+https://github.com/hermitdave/FrequencyWords
+
+Filtered to alphabetic tokens (internal apostrophes allowed) and de-duplicated.
+Used to place a word in a frequency band, which is the standard basis for
+estimating how hard a text is.
