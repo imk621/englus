@@ -26,6 +26,10 @@ interface EpisodeDao {
     @Query("SELECT * FROM episodes WHERE id = :id")
     suspend fun get(id: Long): Episode?
 
+    /** One-shot read of every episode, for maintenance passes after a restore. */
+    @Query("SELECT * FROM episodes")
+    suspend fun all(): List<Episode>
+
     @Insert
     suspend fun insert(episode: Episode): Long
 
@@ -838,11 +842,27 @@ abstract class EnglusDatabase : RoomDatabase() {
             }
         }
 
+        /** The file Room opens; backup copies this, not a snapshot of the objects. */
+        const val NAME = "englus.db"
+
+        /**
+         * Closes the singleton so the file underneath can be replaced.
+         *
+         * Restoring into a live database is not possible: open flows would hold
+         * handles to a file that is about to be swapped, and SQLite would see
+         * its own storage change beneath it. The caller replaces the files and
+         * then restarts the process.
+         */
+        fun closeForRestore() = synchronized(this) {
+            instance?.close()
+            instance = null
+        }
+
         fun get(context: Context): EnglusDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 EnglusDatabase::class.java,
-                "englus.db",
+                NAME,
             ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12).build().also { instance = it }
         }
     }

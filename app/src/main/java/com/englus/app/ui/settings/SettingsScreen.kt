@@ -48,6 +48,22 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.englus.app.backup.BackupRepository
+import com.englus.app.backup.BackupInfo
+import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+
+data class BackupUi(
+    val busy: String? = null,
+    val message: String? = null,
+    val error: String? = null,
+    /** Set once a file has been inspected and is waiting for confirmation. */
+    val pending: BackupInfo? = null,
+    val pendingUri: android.net.Uri? = null,
+    val restored: Boolean = false,
+)
 
 data class SettingsUi(
     val apiKey: String = "",
@@ -58,11 +74,13 @@ data class SettingsUi(
     val busy: Boolean = false,
     val message: String? = null,
     val error: String? = null,
+    val backup: BackupUi = BackupUi(),
 )
 
 class SettingsViewModel(app: Application) : AndroidViewModel(app) {
 
     private val explain = (app as EnglusApp).explain
+    private val backups = BackupRepository(app)
 
     private val _ui = MutableStateFlow(
         SettingsUi(
@@ -90,6 +108,74 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
         explain.settings.model = m
         _ui.update { it.copy(model = m, message = "모델을 $m 으로 설정했습니다.") }
     }
+
+    fun suggestedBackupName(): String =
+        BackupRepository.suggestedFileName(System.currentTimeMillis())
+
+    fun exportTo(target: android.net.Uri) {
+        setBackup { it.copy(busy = "백업 파일 만드는 중…", message = null, error = null) }
+        viewModelScope.launch {
+            try {
+                val info = backups.export(target)
+                setBackup {
+                    it.copy(
+                        busy = null,
+                        message = "저장했습니다 · 저장 문장 ${info.savedSentences}개, " +
+                            "복습 기록 ${info.reviewLogs}건, 단어 ${info.vocabWords}개",
+                    )
+                }
+            } catch (e: Throwable) {
+                setBackup { it.copy(busy = null, error = e.message ?: e.toString()) }
+            }
+        }
+    }
+
+    /**
+     * Reads the file before offering to use it.
+     *
+     * Restoring replaces everything, so the learner should see what is in the
+     * file - and how old it is - before that happens, not afterwards.
+     */
+    fun inspect(source: android.net.Uri) {
+        setBackup { it.copy(busy = "백업 파일 읽는 중…", message = null, error = null) }
+        viewModelScope.launch {
+            try {
+                val info = backups.inspect(source)
+                setBackup { it.copy(busy = null, pending = info, pendingUri = source) }
+            } catch (e: Throwable) {
+                setBackup { it.copy(busy = null, error = e.message ?: e.toString()) }
+            }
+        }
+    }
+
+    fun cancelRestore() = setBackup { it.copy(pending = null, pendingUri = null) }
+
+    fun confirmRestore() {
+        val uri = _ui.value.backup.pendingUri ?: return
+        setBackup { it.copy(busy = "복원 중…", pending = null, pendingUri = null) }
+        viewModelScope.launch {
+            try {
+                backups.restore(uri)
+                val cleared = backups.reconcileMissingAudio()
+                setBackup {
+                    it.copy(
+                        busy = null,
+                        restored = true,
+                        message = "복원했습니다." + if (cleared > 0) {
+                            " 오디오가 없는 에피소드 ${cleared}개는 글로만 복습합니다."
+                        } else "",
+                    )
+                }
+            } catch (e: Throwable) {
+                setBackup { it.copy(busy = null, error = e.message ?: e.toString()) }
+            }
+        }
+    }
+
+    fun dismissBackupMessage() = setBackup { it.copy(message = null, error = null) }
+
+    private fun setBackup(block: (BackupUi) -> BackupUi) =
+        _ui.update { it.copy(backup = block(it.backup)) }
 
     fun setLiveModel(v: String) {
         explain.settings.liveModel = v
@@ -260,6 +346,8 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
                 )
             }
 
+            item { BackupSection(ui.backup, vm) }
+
             item {
                 Spacer(Modifier.height(10.dp))
                 Text("실시간 회화 모델", fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -289,3 +377,142 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
 }
 
 private const val AI_STUDIO_URL = "https://aistudio.google.com/app/apikey"
+
+
+/**
+ * The only way back from a lost phone.
+ *
+ * Placed in settings rather than behind a menu because a backup nobody knows
+ * about is a backup nobody makes. What it does and does not carry is stated on
+ * the screen: discovering after a restore that the API key is not in the file
+ * is a small annoyance, but believing the audio was in there is not.
+ */
+@Composable
+private fun BackupSection(backup: BackupUi, vm: SettingsViewModel) {
+    val context = LocalContext.current
+
+    val create = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri -> uri?.let(vm::exportTo) }
+
+    val open = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let(vm::inspect) }
+
+    Column(Modifier.padding(top = 10.dp)) {
+        Text("백업", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "복습 일정, 어휘 프로필, 저장한 문장, 받아쓰기 기록을 파일 하나로 " +
+                "내보냅니다. 이 앱은 서버도 계정도 없어서, 폰을 잃으면 되돌릴 " +
+                "방법이 이것뿐입니다.",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "오디오와 API 키는 들어가지 않습니다. 오디오는 다시 받을 수 있고 " +
+                "백업이 감당 못 할 크기이며, 키는 파일에 평문으로 남기면 " +
+                "백업이 곧 유출입니다.",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+
+        backup.busy?.let {
+            Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(6.dp))
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { create.launch(vm.suggestedBackupName()) },
+                enabled = backup.busy == null && !backup.restored,
+                modifier = Modifier.weight(1f),
+            ) { Text("백업 파일 만들기", fontSize = 13.sp) }
+
+            OutlinedButton(
+                onClick = { open.launch(arrayOf("application/zip", "*/*")) },
+                enabled = backup.busy == null && !backup.restored,
+                modifier = Modifier.weight(1f),
+            ) { Text("복원", fontSize = 13.sp) }
+        }
+
+        backup.message?.let {
+            Spacer(Modifier.height(8.dp))
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+            ) { Text(it, Modifier.padding(12.dp), fontSize = 12.sp) }
+        }
+        backup.error?.let {
+            Spacer(Modifier.height(8.dp))
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) { Text(it, Modifier.padding(12.dp), fontSize = 12.sp) }
+        }
+
+        // Restoring swapped the database under a running process. Carrying on
+        // with the old one loaded would show stale data and write it back.
+        if (backup.restored) {
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = {
+                    val intent = context.packageManager
+                        .getLaunchIntentForPackage(context.packageName)
+                        ?.addFlags(
+                            android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK or
+                                android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                        )
+                    context.startActivity(intent)
+                    Runtime.getRuntime().exit(0)
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("앱 다시 시작") }
+        }
+    }
+
+    backup.pending?.let { info ->
+        AlertDialog(
+            onDismissRequest = vm::cancelRestore,
+            title = { Text("이 백업으로 되돌릴까요?") },
+            text = {
+                Column {
+                    Text(
+                        java.text.SimpleDateFormat("yyyy년 M월 d일 HH:mm", java.util.Locale.KOREA)
+                            .format(java.util.Date(info.createdAt)),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    // Two calls rather than one string with an escape: this file
+                    // has had a newline escape turn into a real line break twice.
+                    Text(
+                        "에피소드 ${info.episodes}개 · 저장 문장 ${info.savedSentences}개",
+                        fontSize = 13.sp,
+                    )
+                    Text(
+                        "복습 기록 ${info.reviewLogs}건 · 단어 ${info.vocabWords}개",
+                        fontSize = 13.sp,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "지금 이 기기에 있는 학습 기록은 전부 사라지고 이 파일의 것으로 " +
+                            "바뀝니다. 되돌릴 수 없습니다.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = vm::confirmRestore) { Text("복원") }
+            },
+            dismissButton = {
+                TextButton(onClick = vm::cancelRestore) { Text("취소") }
+            },
+        )
+    }
+}
