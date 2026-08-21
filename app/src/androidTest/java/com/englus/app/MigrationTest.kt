@@ -376,6 +376,40 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate9To10AddsExamsAndCascades() {
+        helper.createDatabase(TEST_DB, 1).close()
+        helper.runMigrationsAndValidate(
+            TEST_DB, 9, true,
+            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
+            MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+        ).close()
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 10, true, MIGRATION_9_10)
+
+        db.execSQL(
+            "INSERT INTO exam_sessions (episodeId, episodeTitle, total, correct, finished, elapsedMs, createdAt) " +
+                "VALUES (1, 'Day001', 8, 6, 1, 120000, 1)"
+        )
+        db.execSQL(
+            "INSERT INTO exam_questions " +
+                "(sessionId, kind, position, prompt, options, correctIndex, explanation, startMs, endMs, chosenIndex) " +
+                "VALUES (1, 'HEARD', 0, '', '[\"a\",\"b\",\"c\",\"d\"]', 0, '설명', 0, 2000, 0)"
+        )
+        db.query("SELECT kind, options FROM exam_questions").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("HEARD", c.getString(0))
+            assertTrue("options not stored as JSON", c.getString(1).startsWith("["))
+        }
+
+        db.execSQL("PRAGMA foreign_keys = ON")
+        db.execSQL("DELETE FROM exam_sessions WHERE id = 1")
+        db.query("SELECT COUNT(*) FROM exam_questions").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("question not cascaded", 0, c.getInt(0))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
         val MIGRATION_1_2 = EnglusDatabase.MIGRATION_1_2
@@ -386,5 +420,6 @@ class MigrationTest {
         val MIGRATION_6_7 = EnglusDatabase.MIGRATION_6_7
         val MIGRATION_7_8 = EnglusDatabase.MIGRATION_7_8
         val MIGRATION_8_9 = EnglusDatabase.MIGRATION_8_9
+        val MIGRATION_9_10 = EnglusDatabase.MIGRATION_9_10
     }
 }

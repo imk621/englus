@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -34,6 +35,8 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,7 +50,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.SpanStyle
@@ -77,6 +82,8 @@ fun PlayerScreen(
     onBack: () -> Unit,
     onDictation: (Int) -> Unit,
     onShadowing: (Int) -> Unit,
+    onExam: () -> Unit,
+    onCheckTranscript: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val episode by vm.episode.collectAsStateWithLifecycle()
@@ -100,14 +107,30 @@ fun PlayerScreen(
                     IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "뒤로") }
                 },
                 actions = {
-                    // Starts from the sentence being listened to, not the top of
-                    // the episode: dictation is most useful right where something
-                    // was missed.
-                    IconButton(onClick = { onShadowing(current?.position ?: 0) }) {
-                        Icon(Icons.Default.Mic, "쉐도잉")
+                    var menuOpen by remember { mutableStateOf(false) }
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(Icons.Default.MoreVert, "연습")
                     }
-                    IconButton(onClick = { onDictation(current?.position ?: 0) }) {
-                        Icon(Icons.Default.EditNote, "받아쓰기")
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        // Drills start from the sentence being listened to, not the
+                        // top of the episode: practice is most useful right where
+                        // something was missed.
+                        DropdownMenuItem(
+                            text = { Text("받아쓰기") },
+                            onClick = { menuOpen = false; onDictation(current?.position ?: 0) },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("쉐도잉") },
+                            onClick = { menuOpen = false; onShadowing(current?.position ?: 0) },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("듣기 시험") },
+                            onClick = { menuOpen = false; onExam() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("전사 정확도 확인") },
+                            onClick = { menuOpen = false; onCheckTranscript() },
+                        )
                     }
                 },
             )

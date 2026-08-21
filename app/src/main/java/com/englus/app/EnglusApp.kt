@@ -5,6 +5,7 @@ import com.englus.app.asr.ModelStore
 import com.englus.app.data.EpisodeRepository
 import com.englus.app.feed.FeedRepository
 import com.englus.app.gemini.ExplainRepository
+import com.englus.app.gemini.ExamRepository
 import com.englus.app.gemini.WritingRepository
 import com.englus.app.ocr.ReadingRepository
 import com.englus.app.srs.ReminderWorker
@@ -23,6 +24,7 @@ class EnglusApp : Application() {
     val srs: SrsRepository by lazy { SrsRepository(this) }
     val writing: WritingRepository by lazy { WritingRepository(this) }
     val reading: ReadingRepository by lazy { ReadingRepository(this) }
+    val exams: ExamRepository by lazy { ExamRepository(this) }
 
     override fun onCreate() {
         super.onCreate()

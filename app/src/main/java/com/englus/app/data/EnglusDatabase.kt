@@ -178,6 +178,13 @@ interface ReviewDao {
 
     @Query("SELECT COUNT(*) FROM review_logs WHERE reviewedAt >= :since")
     fun observeReviewsSince(since: Long): Flow<Int>
+
+    /** Ordered per card so the first two reviews of each can be paired up. */
+    @Query("SELECT * FROM review_logs ORDER BY cardId, reviewedAt")
+    suspend fun allLogs(): List<ReviewLog>
+
+    @Query("SELECT COUNT(*) FROM review_logs")
+    fun observeLogCount(): Flow<Int>
 }
 
 @Dao
@@ -228,6 +235,43 @@ interface SpeakingDao {
 
     @Query("SELECT * FROM speaking_attempts WHERE sentenceId = :sentenceId ORDER BY attemptedAt DESC LIMIT 1")
     suspend fun latestFor(sentenceId: Long): SpeakingAttempt?
+}
+
+@Dao
+interface ExamDao {
+
+    @Insert
+    suspend fun insertSession(session: ExamSession): Long
+
+    @Insert
+    suspend fun insertQuestions(questions: List<ExamQuestion>)
+
+    @Update
+    suspend fun updateSession(session: ExamSession)
+
+    @Update
+    suspend fun updateQuestion(question: ExamQuestion)
+
+    @Query("SELECT * FROM exam_sessions WHERE id = :id")
+    suspend fun session(id: Long): ExamSession?
+
+    @Query("SELECT * FROM exam_questions WHERE sessionId = :sessionId ORDER BY position")
+    fun observeQuestions(sessionId: Long): Flow<List<ExamQuestion>>
+
+    @Query("SELECT * FROM exam_sessions WHERE finished = 1 ORDER BY createdAt DESC LIMIT 20")
+    fun observeHistory(): Flow<List<ExamSession>>
+
+    @Query(
+        """
+        SELECT q.kind AS kind, COUNT(*) AS total,
+               SUM(CASE WHEN q.chosenIndex = q.correctIndex THEN 1 ELSE 0 END) AS correct
+        FROM exam_questions q
+        JOIN exam_sessions s ON s.id = q.sessionId
+        WHERE s.finished = 1
+        GROUP BY q.kind
+        """
+    )
+    fun observeKindScores(): Flow<List<ExamKindScore>>
 }
 
 @Dao
@@ -296,14 +340,15 @@ interface FeedDao {
         ReviewCard::class, ReviewLog::class,
         Writing::class, WritingMistake::class,
         SpeakingAttempt::class,
+        ExamSession::class, ExamQuestion::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 @TypeConverters(
     Converters::class, FeedConverters::class,
     DictationConverters::class, ReviewConverters::class,
-    WritingConverters::class,
+    WritingConverters::class, ExamConverters::class,
 )
 abstract class EnglusDatabase : RoomDatabase() {
 
@@ -314,6 +359,7 @@ abstract class EnglusDatabase : RoomDatabase() {
     abstract fun reviews(): ReviewDao
     abstract fun writings(): WritingDao
     abstract fun speaking(): SpeakingDao
+    abstract fun exams(): ExamDao
 
     companion object {
         @Volatile private var instance: EnglusDatabase? = null
@@ -549,12 +595,57 @@ abstract class EnglusDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds listening exams. Additive. */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `exam_sessions` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`episodeId` INTEGER NOT NULL, " +
+                        "`episodeTitle` TEXT NOT NULL, " +
+                        "`total` INTEGER NOT NULL, " +
+                        "`correct` INTEGER NOT NULL, " +
+                        "`finished` INTEGER NOT NULL, " +
+                        "`elapsedMs` INTEGER NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_exam_sessions_episodeId` " +
+                        "ON `exam_sessions` (`episodeId`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_exam_sessions_createdAt` " +
+                        "ON `exam_sessions` (`createdAt`)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `exam_questions` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`sessionId` INTEGER NOT NULL, " +
+                        "`kind` TEXT NOT NULL, " +
+                        "`position` INTEGER NOT NULL, " +
+                        "`prompt` TEXT NOT NULL, " +
+                        "`options` TEXT NOT NULL, " +
+                        "`correctIndex` INTEGER NOT NULL, " +
+                        "`explanation` TEXT NOT NULL, " +
+                        "`startMs` INTEGER NOT NULL, " +
+                        "`endMs` INTEGER NOT NULL, " +
+                        "`chosenIndex` INTEGER NOT NULL, " +
+                        "FOREIGN KEY(`sessionId`) REFERENCES `exam_sessions`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE )"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_exam_questions_sessionId` " +
+                        "ON `exam_questions` (`sessionId`)"
+                )
+            }
+        }
+
         fun get(context: Context): EnglusDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 EnglusDatabase::class.java,
                 "englus.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10).build().also { instance = it }
         }
     }
 }

@@ -31,6 +31,9 @@ data class ReviewUi(
     val expandedSentenceId: Long? = null,
     val explaining: Boolean = false,
     val explainError: String? = null,
+    val analysis: com.englus.app.srs.SrsAnalysis? = null,
+    val analyzing: Boolean = false,
+    val analysisMessage: String? = null,
 )
 
 class ReviewViewModel(app: Application) : AndroidViewModel(app) {
@@ -59,6 +62,38 @@ class ReviewViewModel(app: Application) : AndroidViewModel(app) {
 
     val totalCards: StateFlow<Int> =
         srs.observeTotalCards().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val logCount: StateFlow<Int> =
+        srs.observeLogCount().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val personalised: Boolean get() = srs.personalised
+
+    /**
+     * Calibration is the honest half: even without enough history to re-fit
+     * anything, it says whether the schedule is too aggressive for this learner.
+     */
+    fun analyze() {
+        viewModelScope.launch {
+            _ui.update { it.copy(analyzing = true, analysisMessage = null) }
+            val result = runCatching { srs.analyze() }.getOrNull()
+            _ui.update { it.copy(analyzing = false, analysis = result) }
+        }
+    }
+
+    fun applyPersonalWeights() {
+        val fit = _ui.value.analysis?.optimization ?: return
+        viewModelScope.launch {
+            srs.applyPersonalWeights(fit.initialStability)
+            _ui.update { it.copy(analysisMessage = "개인 가중치를 적용했습니다.") }
+        }
+    }
+
+    fun resetWeights() {
+        viewModelScope.launch {
+            srs.resetWeights()
+            _ui.update { it.copy(analysisMessage = "기본 가중치로 되돌렸습니다.") }
+        }
+    }
 
     val reviewsToday: StateFlow<Int> =
         srs.observeReviewsToday().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)

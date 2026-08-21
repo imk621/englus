@@ -52,6 +52,13 @@ import com.englus.app.ui.review.ReviewScreen
 import com.englus.app.ui.settings.SettingsScreen
 import com.englus.app.ui.shadowing.ShadowingScreen
 import com.englus.app.ui.shadowing.ShadowingViewModel
+import com.englus.app.ui.exam.ExamScreen
+import com.englus.app.ui.quality.TranscriptCheckScreen
+import com.englus.app.ui.quality.TranscriptCheckViewModel
+import com.englus.app.ui.exam.ExamViewModel
+import com.englus.app.ui.sound.SoundDrillScreen
+import com.englus.app.ui.sound.SoundDrillViewModel
+import com.englus.app.ui.sound.SoundPatternListScreen
 import com.englus.app.ui.srs.ReviewSessionScreen
 import com.englus.app.ui.writing.WritingScreen
 
@@ -154,10 +161,35 @@ private fun Root() {
                     onBack = {},
                     onOpenSettings = { nav.navigate("settings") },
                     onStartSession = { nav.navigate("srs") },
+                    onSoundDrills = { nav.navigate("sound") },
                 )
             }
 
             composable("srs") { ReviewSessionScreen(onBack = { nav.popBackStack() }) }
+            composable("sound") {
+                val application = app()
+                val vm: SoundDrillViewModel = viewModel(
+                    key = "sound-list",
+                    factory = viewModelFactory { initializer { SoundDrillViewModel(application, null) } },
+                )
+                SoundPatternListScreen(
+                    vm = vm,
+                    onBack = { nav.popBackStack() },
+                    onDrill = { nav.navigate("sound/$it") },
+                )
+            }
+            composable(
+                "sound/{pattern}",
+                arguments = listOf(navArgument("pattern") { type = NavType.StringType }),
+            ) { e ->
+                val name = e.arguments?.getString("pattern") ?: return@composable
+                val application = app()
+                val vm: SoundDrillViewModel = viewModel(
+                    key = "sound-$name",
+                    factory = viewModelFactory { initializer { SoundDrillViewModel(application, name) } },
+                )
+                SoundDrillScreen(vm = vm, onBack = { nav.popBackStack() })
+            }
             composable("settings") { SettingsScreen(onBack = { nav.popBackStack() }) }
             composable("podcasts") {
                 SubscriptionsScreen(
@@ -202,6 +234,8 @@ private fun Root() {
                     onBack = { nav.popBackStack() },
                     onDictation = { position -> nav.navigate("dictation/$id/$position") },
                     onShadowing = { position -> nav.navigate("shadowing/$id/$position") },
+                    onExam = { nav.navigate("exam/$id") },
+                    onCheckTranscript = { nav.navigate("check/$id") },
                     onOpenSettings = { nav.navigate("settings") },
                 )
             }
@@ -220,6 +254,32 @@ private fun Root() {
                     onBack = { nav.popBackStack() },
                     onOpenSettings = { nav.navigate("settings") },
                 )
+            }
+            composable(
+                "check/{episodeId}",
+                arguments = listOf(navArgument("episodeId") { type = NavType.LongType }),
+            ) { e ->
+                val id = e.arguments?.getLong("episodeId") ?: return@composable
+                val application = app()
+                val vm: TranscriptCheckViewModel = viewModel(
+                    key = "check-$id",
+                    factory = viewModelFactory {
+                        initializer { TranscriptCheckViewModel(application, id) }
+                    },
+                )
+                TranscriptCheckScreen(vm = vm, onBack = { nav.popBackStack() })
+            }
+            composable(
+                "exam/{episodeId}",
+                arguments = listOf(navArgument("episodeId") { type = NavType.LongType }),
+            ) { e ->
+                val id = e.arguments?.getLong("episodeId") ?: return@composable
+                val application = app()
+                val vm: ExamViewModel = viewModel(
+                    key = "exam-$id",
+                    factory = viewModelFactory { initializer { ExamViewModel(application, id) } },
+                )
+                ExamScreen(vm = vm, onBack = { nav.popBackStack() })
             }
             composable(
                 "shadowing/{episodeId}/{position}",

@@ -15,8 +15,10 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -47,6 +49,7 @@ fun ReviewScreen(
     showBack: Boolean = true,
     onOpenSettings: () -> Unit,
     onStartSession: () -> Unit,
+    onSoundDrills: () -> Unit,
     vm: ReviewViewModel = viewModel(),
 ) {
     val items by vm.items.collectAsStateWithLifecycle()
@@ -58,6 +61,7 @@ fun ReviewScreen(
     val dueCount by vm.dueCount.collectAsStateWithLifecycle()
     val totalCards by vm.totalCards.collectAsStateWithLifecycle()
     val reviewsToday by vm.reviewsToday.collectAsStateWithLifecycle()
+    val logCount by vm.logCount.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -89,6 +93,31 @@ fun ReviewScreen(
 
             if (total > 0) {
                 item { WeaknessCard(total, correct, weakness) }
+            }
+
+            if (logCount >= 20) {
+                item { ScheduleFitCard(ui, logCount, vm) }
+            }
+
+            if (items.isNotEmpty()) {
+                item {
+                    Card(
+                        Modifier.fillMaxWidth().clickable(onClick = onSoundDrills),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                        ),
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text("소리 패턴 훈련", fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "저장된 문장을 축약·연음·약형 같은 소리 변형별로 묶어 반복합니다. " +
+                                    "'소리' 진단을 받은 문장에 직접 대응하는 훈련입니다.",
+                                fontSize = 12.sp,
+                            )
+                        }
+                    }
+                }
             }
 
             item {
@@ -172,6 +201,114 @@ private fun DueCard(due: Int, total: Int, reviewedToday: Int, onStart: () -> Uni
                 Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text("복습 시작") }
             }
         }
+    }
+}
+
+/**
+ * Predicted versus observed recall, and a personal re-fit when the history can
+ * support one.
+ *
+ * Shown only after enough reviews exist. Offering personalisation on ten reviews
+ * would produce a confident number built on nothing.
+ */
+@Composable
+private fun ScheduleFitCard(ui: ReviewUi, logCount: Int, vm: ReviewViewModel) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("복습 간격 점검", fontWeight = FontWeight.Bold)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    if (vm.personalised) "개인 가중치" else "기본 가중치",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Text("복습 기록 ${logCount}건", fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            val analysis = ui.analysis
+            if (analysis == null) {
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = { vm.analyze() },
+                    enabled = !ui.analyzing,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(if (ui.analyzing) "분석 중…" else "예측 대비 실제 확인") }
+            } else {
+                Spacer(Modifier.height(10.dp))
+                analysis.calibration.forEach { b ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                        Text(
+                            "예측 ${(b.predicted * 100).toInt()}%",
+                            Modifier.weight(1f),
+                            fontSize = 12.sp,
+                        )
+                        Text(
+                            "실제 ${(b.actual * 100).toInt()}%  (${b.count}건)",
+                            fontSize = 12.sp,
+                            color = if (b.actual + 0.05 < b.predicted)
+                                MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(verdict(analysis), fontSize = 12.sp)
+
+                val fit = analysis.optimization
+                Spacer(Modifier.height(10.dp))
+                if (fit == null) {
+                    Text(
+                        "개인 가중치를 적용하려면 복습 기록이 더 필요합니다. " +
+                            "적은 데이터로 맞춘 값은 개인화가 아니라 잡음입니다.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Text(
+                        "표본 ${fit.sampleCount}건 · 오차 %.3f → %.3f".format(fit.lossBefore, fit.lossAfter),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { vm.applyPersonalWeights() },
+                            enabled = fit.improved,
+                            modifier = Modifier.weight(1f),
+                        ) { Text(if (fit.improved) "개인 가중치 적용" else "개선 없음") }
+                        if (vm.personalised) {
+                            OutlinedButton(onClick = { vm.resetWeights() }) { Text("되돌리기") }
+                        }
+                    }
+                }
+                ui.analysisMessage?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+    }
+}
+
+private fun verdict(analysis: com.englus.app.srs.SrsAnalysis): String {
+    val n = analysis.calibration.sumOf { it.count }
+    if (n == 0) return ""
+    val predicted = analysis.calibration.sumOf { it.predicted * it.count } / n
+    val actual = analysis.calibration.sumOf { it.actual * it.count } / n
+    return when {
+        actual + 0.07 < predicted ->
+            "실제로 잊는 비율이 예측보다 높습니다. 간격이 지금 조금 깁니다."
+        actual > predicted + 0.07 ->
+            "예측보다 잘 기억하고 있습니다. 간격을 늘려도 됩니다."
+        else -> "예측과 실제가 잘 맞습니다. 지금 간격이 적절합니다."
     }
 }
 
