@@ -44,13 +44,24 @@ class GeminiSettings(context: Context) {
         get() = prefs.getString(KEY_MODEL, DEFAULT_MODEL).orEmpty().ifBlank { DEFAULT_MODEL }
         set(value) = prefs.edit().putString(KEY_MODEL, value.trim()).apply()
 
+    /**
+     * The Live API runs on its own model family and will not accept an ordinary
+     * text model id, so it cannot share [model]. Kept as a preference for the
+     * same reason: these ids are previews and are renamed often.
+     */
+    var liveModel: String
+        get() = prefs.getString(KEY_LIVE_MODEL, DEFAULT_LIVE_MODEL).orEmpty().ifBlank { DEFAULT_LIVE_MODEL }
+        set(value) = prefs.edit().putString(KEY_LIVE_MODEL, value.trim()).apply()
+
     val configured: Boolean get() = apiKey.isNotBlank()
 
     fun clear() = prefs.edit().clear().apply()
 
     companion object {
         const val DEFAULT_MODEL = "gemini-3.7-flash"
+        const val DEFAULT_LIVE_MODEL = "gemini-3.1-flash-live-preview"
         private const val KEY_API = "apiKey"
         private const val KEY_MODEL = "model"
+        private const val KEY_LIVE_MODEL = "liveModel"
     }
 }

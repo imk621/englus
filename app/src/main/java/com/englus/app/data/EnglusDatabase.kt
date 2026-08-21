@@ -359,6 +359,44 @@ interface VocabDao {
 }
 
 @Dao
+interface ConversationDao {
+
+    @Insert
+    suspend fun insert(conversation: Conversation): Long
+
+    @Update
+    suspend fun update(conversation: Conversation)
+
+    @Insert
+    suspend fun insertTurns(turns: List<ConversationTurn>)
+
+    @Update
+    suspend fun updateTurn(turn: ConversationTurn)
+
+    @Query("SELECT * FROM conversations ORDER BY startedAt DESC LIMIT 30")
+    fun observeAll(): Flow<List<Conversation>>
+
+    @Query("SELECT * FROM conversations WHERE id = :id")
+    fun observe(id: Long): Flow<Conversation?>
+
+    @Query("SELECT * FROM conversations WHERE id = :id")
+    suspend fun get(id: Long): Conversation?
+
+    @Query("SELECT * FROM conversation_turns WHERE conversationId = :id ORDER BY position")
+    fun observeTurns(id: Long): Flow<List<ConversationTurn>>
+
+    @Query("SELECT * FROM conversation_turns WHERE conversationId = :id ORDER BY position")
+    suspend fun turns(id: Long): List<ConversationTurn>
+
+    @Query("DELETE FROM conversations WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    /** Recent topics, so the next suggestion does not repeat one. */
+    @Query("SELECT topic FROM conversations ORDER BY startedAt DESC LIMIT 8")
+    suspend fun recentTopics(): List<String>
+}
+
+@Dao
 interface FeedDao {
 
     @Query("SELECT * FROM podcasts ORDER BY addedAt DESC")
@@ -413,8 +451,9 @@ interface FeedDao {
         SpeakingAttempt::class,
         ExamSession::class, ExamQuestion::class,
         VocabWord::class,
+        Conversation::class, ConversationTurn::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true,
 )
 @TypeConverters(
@@ -434,6 +473,7 @@ abstract class EnglusDatabase : RoomDatabase() {
     abstract fun speaking(): SpeakingDao
     abstract fun exams(): ExamDao
     abstract fun vocab(): VocabDao
+    abstract fun conversations(): ConversationDao
 
     companion object {
         @Volatile private var instance: EnglusDatabase? = null
@@ -744,12 +784,48 @@ abstract class EnglusDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds spoken conversations and their transcripts. Additive. */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `conversations` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`topic` TEXT NOT NULL, " +
+                        "`startedAt` INTEGER NOT NULL, " +
+                        "`durationSec` INTEGER NOT NULL, " +
+                        "`model` TEXT NOT NULL, " +
+                        "`feedback` TEXT NOT NULL, " +
+                        "`mistakeCount` INTEGER NOT NULL)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_conversations_startedAt` " +
+                        "ON `conversations` (`startedAt`)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `conversation_turns` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`conversationId` INTEGER NOT NULL, " +
+                        "`position` INTEGER NOT NULL, " +
+                        "`fromUser` INTEGER NOT NULL, " +
+                        "`text` TEXT NOT NULL, " +
+                        "`correction` TEXT, " +
+                        "`note` TEXT, " +
+                        "FOREIGN KEY(`conversationId`) REFERENCES `conversations`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE )"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_conversation_turns_conversationId` " +
+                        "ON `conversation_turns` (`conversationId`)"
+                )
+            }
+        }
+
         fun get(context: Context): EnglusDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 EnglusDatabase::class.java,
                 "englus.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12).build().also { instance = it }
         }
     }
 }

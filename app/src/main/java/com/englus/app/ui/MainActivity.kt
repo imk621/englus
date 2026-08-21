@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -40,6 +41,8 @@ import com.englus.app.data.EpisodeKind
 import com.englus.app.ui.dictation.DictationScreen
 import com.englus.app.ui.dictation.DictationViewModel
 import com.englus.app.ui.library.LibraryScreen
+import com.englus.app.ui.live.LiveScreen
+import com.englus.app.ui.live.LiveViewModel
 import com.englus.app.ui.player.PlayerScreen
 import com.englus.app.ui.player.PlayerViewModel
 import com.englus.app.ui.podcast.PodcastScreen
@@ -80,6 +83,13 @@ class MainActivity : ComponentActivity() {
  */
 private enum class Tab(val route: String, val label: String, val icon: ImageVector) {
     LISTENING("tab/listening", "듣기", Icons.Default.Headphones),
+    /**
+     * Speaking is the second priority of this app and until now had no home of
+     * its own - shadowing was reachable only from inside a player. Live
+     * conversation is the part that does not belong to any one episode, so it
+     * gets the tab.
+     */
+    SPEAKING("tab/speaking", "말하기", Icons.Default.Mic),
     READING("tab/reading", "읽기", Icons.Default.MenuBook),
     WRITING("tab/writing", "쓰기", Icons.Default.EditNote),
     REVIEW("tab/review", "복습", Icons.Default.Bookmarks),
@@ -139,6 +149,19 @@ private fun Root() {
                     onPodcasts = { nav.navigate("podcasts") },
                     onSettings = { nav.navigate("settings") },
                     onReadingCapture = { nav.navigate("reading/capture") },
+                )
+            }
+            composable(Tab.SPEAKING.route) {
+                val application = app()
+                val vm: LiveViewModel = viewModel(
+                    key = "live",
+                    factory = viewModelFactory { initializer { LiveViewModel(application) } },
+                )
+                LiveScreen(
+                    vm = vm,
+                    showBack = false,
+                    onBack = {},
+                    onOpenSettings = { nav.navigate("settings") },
                 )
             }
             composable(Tab.READING.route) {

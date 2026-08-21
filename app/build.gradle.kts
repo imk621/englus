@@ -92,6 +92,12 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
 
+    // The only third-party HTTP dependency, and it is here for one reason: the
+    // Live API is a bidirectional WebSocket, and there is no WebSocket client in
+    // the Android platform. Every other network call in this app is a plain
+    // HttpURLConnection in feed/Http.kt.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 

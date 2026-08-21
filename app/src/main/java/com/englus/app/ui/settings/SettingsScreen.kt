@@ -52,6 +52,7 @@ import kotlinx.coroutines.launch
 data class SettingsUi(
     val apiKey: String = "",
     val model: String = GeminiSettings.DEFAULT_MODEL,
+    val liveModel: String = GeminiSettings.DEFAULT_LIVE_MODEL,
     val models: List<String> = emptyList(),
     val savedKey: Boolean = false,
     val busy: Boolean = false,
@@ -67,6 +68,7 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
         SettingsUi(
             apiKey = explain.settings.apiKey,
             model = explain.settings.model,
+            liveModel = explain.settings.liveModel,
             savedKey = explain.settings.configured,
         )
     )
@@ -87,6 +89,11 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun selectModel(m: String) {
         explain.settings.model = m
         _ui.update { it.copy(model = m, message = "모델을 $m 으로 설정했습니다.") }
+    }
+
+    fun setLiveModel(v: String) {
+        explain.settings.liveModel = v
+        _ui.update { it.copy(liveModel = v) }
     }
 
     /**
@@ -149,8 +156,10 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "'자세히' 설명에만 쓰입니다. 전사·해석·받아쓰기는 전부 기기 안에서 " +
-                                "처리되므로 키 없이도 앱은 완전히 동작합니다.",
+                            "문장 설명, 영작 첨삭, 듣기 시험, 실시간 회화에 쓰입니다. " +
+                                "전사·해석·받아쓰기·복습·어휘는 전부 기기 안에서 처리되므로, " +
+                                "키가 없어도 앱의 중심 기능은 그대로 동작합니다. " +
+                                "이 중 실제로 요금이 나가는 것은 실시간 회화뿐입니다.",
                             fontSize = 12.sp,
                         )
 
@@ -248,6 +257,31 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
                     selected = m == ui.model,
                     onClick = { vm.selectModel(m) },
                     label = { Text(m, fontSize = 12.sp) },
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(10.dp))
+                Text("실시간 회화 모델", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Spacer(Modifier.height(2.dp))
+                // Typed rather than chosen from a list: the models endpoint above
+                // reports what supports generateContent, and the Live models do
+                // not appear there. Their ids are previews and get renamed, so
+                // this has to be editable rather than a constant in the code.
+                Text(
+                    "실시간 회화는 별도 모델을 씁니다. 위 목록에는 나오지 않습니다 - " +
+                        "그 목록은 텍스트 생성을 지원하는 모델만 보여주기 때문입니다. " +
+                        "프리뷰 이름이라 바뀌면 여기서 고치세요.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = ui.liveModel,
+                    onValueChange = vm::setLiveModel,
+                    label = { Text("Live 모델") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }

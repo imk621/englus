@@ -45,6 +45,7 @@ import com.englus.app.data.VocabBandStat
 import com.englus.app.vocab.Band
 import com.englus.app.vocab.Cefr
 import com.englus.app.vocab.VocabRepository
+import androidx.compose.foundation.layout.size
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -247,7 +248,7 @@ private fun RecommendCard(ui: VocabUi, vm: VocabViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     if (ui.scanning) {
-                        CircularProgressIndicator(Modifier.height(16.dp), strokeWidth = 2.dp)
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(8.dp))
                         Text("분석 중")
                     } else {

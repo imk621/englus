@@ -459,6 +459,40 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate11To12AddsConversationsAndCascades() {
+        helper.createDatabase(TEST_DB, 1).close()
+        helper.runMigrationsAndValidate(
+            TEST_DB, 11, true,
+            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
+            MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+            MIGRATION_9_10, MIGRATION_10_11,
+        ).close()
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 12, true, MIGRATION_11_12)
+
+        db.execSQL(
+            "INSERT INTO conversations (topic, startedAt, durationSec, model, feedback, mistakeCount) " +
+                "VALUES ('Planet Money', 1, 240, 'live', '', 0)"
+        )
+        db.execSQL(
+            "INSERT INTO conversation_turns (conversationId, position, fromUser, text) " +
+                "VALUES (1, 0, 1, 'I go to the shop yesterday')"
+        )
+        db.query("SELECT fromUser, correction FROM conversation_turns").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(1, c.getInt(0))
+            assertTrue("correction should start empty", c.isNull(1))
+        }
+
+        db.execSQL("PRAGMA foreign_keys = ON")
+        db.execSQL("DELETE FROM conversations WHERE id = 1")
+        db.query("SELECT COUNT(*) FROM conversation_turns").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("turn not cascaded", 0, c.getInt(0))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
         val MIGRATION_1_2 = EnglusDatabase.MIGRATION_1_2
@@ -471,5 +505,6 @@ class MigrationTest {
         val MIGRATION_8_9 = EnglusDatabase.MIGRATION_8_9
         val MIGRATION_9_10 = EnglusDatabase.MIGRATION_9_10
         val MIGRATION_10_11 = EnglusDatabase.MIGRATION_10_11
+        val MIGRATION_11_12 = EnglusDatabase.MIGRATION_11_12
     }
 }

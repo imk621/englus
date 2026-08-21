@@ -10,6 +10,7 @@ import com.englus.app.gemini.WritingRepository
 import com.englus.app.ocr.ReadingRepository
 import com.englus.app.srs.ReminderWorker
 import com.englus.app.srs.SrsRepository
+import com.englus.app.live.LiveRepository
 import com.englus.app.vocab.VocabRepository
 
 /**
@@ -27,6 +28,7 @@ class EnglusApp : Application() {
     val reading: ReadingRepository by lazy { ReadingRepository(this) }
     val exams: ExamRepository by lazy { ExamRepository(this) }
     val vocab: VocabRepository by lazy { VocabRepository(this) }
+    val live: LiveRepository by lazy { LiveRepository(this) }
 
     override fun onCreate() {
         super.onCreate()
