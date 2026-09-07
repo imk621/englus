@@ -30,6 +30,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.Button
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,6 +58,7 @@ fun SpeakingHomeScreen(
 
             if (ui.missedCount > 0) {
                 item { MissedCard(ui.missedCount, onShadowMissed) }
+                item { HandsFreeCard(ui.missedCount) { vm.startHandsFree() } }
             }
 
             if (!ui.modelReady) {
@@ -153,6 +158,44 @@ private fun MissedCard(count: Int, onClick: () -> Unit) {
                     "에피소드를 처음부터 훑으면 이미 쉬웠던 문장에 시간을 다 씁니다.",
                 fontSize = 12.sp,
             )
+        }
+    }
+}
+
+/**
+ * Speaking practice for the hours a screen cannot be used.
+ *
+ * Scored shadowing needs both hands and eyes, which confines it to sitting down.
+ * The times a learner can actually say things out loud - walking, cooking,
+ * commuting alone - are exactly the times they cannot look at anything.
+ */
+@Composable
+private fun HandsFreeCard(count: Int, onStart: () -> Unit) {
+    var started by remember { mutableStateOf(false) }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text("핸즈프리로 따라 말하기", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "문장 하나 → 따라 말할 만큼의 빈 시간 → 다음 문장. 화면을 꺼도 계속되고 " +
+                    "잠금화면에 문장이 뜹니다. 이어폰을 끼고 주머니에 넣은 채로 " +
+                    "걸으면서 하는 용도입니다.",
+                fontSize = 12.sp,
+            )
+            Spacer(Modifier.height(4.dp))
+            // Saying what it does not do matters as much: a number produced from
+            // a recording made in traffic would measure the street.
+            Text(
+                "채점은 없습니다. 길에서 녹음한 것을 채점하면 발음이 아니라 소음을 " +
+                    "재게 됩니다. 점수가 필요하면 위의 쉐도잉을 쓰세요.",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = { onStart(); started = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(if (started) "재생 중 · 잠금화면에서 조작하세요" else "${count}개로 시작") }
         }
     }
 }

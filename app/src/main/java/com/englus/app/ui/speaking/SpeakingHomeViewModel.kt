@@ -12,7 +12,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import com.englus.app.data.SavedSentence
+import com.englus.app.playback.HandsFree
+import com.englus.app.playback.HandsFreeClip
+import com.englus.app.playback.PlaybackConnection
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /** One episode that can be shadowed, with how far the learner has got in it. */
 data class ShadowTarget(
@@ -75,4 +81,33 @@ class SpeakingHomeViewModel(app: Application) : AndroidViewModel(app) {
             },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SpeakingHomeUi())
+
+    /**
+     * Loads the missed sentences into the media session and starts them.
+     *
+     * Handed to the session rather than played here so that it survives the
+     * screen being switched off, which is the entire point: this is meant to be
+     * started and then put in a pocket.
+     */
+    fun startHandsFree() {
+        viewModelScope.launch {
+            val clips = db.dictation().observeSaved().first()
+                .filter { it.audioPath.isNotBlank() && it.sentence.endMs > it.sentence.startMs }
+                .map { it.toClip() }
+            if (clips.isEmpty()) return@launch
+
+            val controller = PlaybackConnection.await(getApplication())
+            controller.setMediaItems(HandsFree.buildQueue(getApplication(), clips))
+            controller.prepare()
+            controller.play()
+        }
+    }
+
+    private fun SavedSentence.toClip() = HandsFreeClip(
+        text = sentence.text,
+        audioPath = audioPath,
+        startMs = sentence.startMs,
+        endMs = sentence.endMs,
+        source = episodeTitle,
+    )
 }
