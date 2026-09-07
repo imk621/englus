@@ -33,6 +33,23 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!--
+              Reading material was previously limited to what the learner
+              photographed or pasted, and that friction is the reason it does not
+              happen. The phone is already full of English; this makes any of it
+              one tap away from becoming a lesson.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <!-- Camera captures are handed to the camera app by content Uri. -->
@@ -45,6 +62,22 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <receiver
+            android:name=".exposure.SnoozeReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".widget.SentenceWidget"
+            android:exported="false"
+            android:label="@string/widget_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_sentence_info" />
+        </receiver>
 
         <service
             android:name=".playback.PlaybackService"

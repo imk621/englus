@@ -2,6 +2,7 @@ package com.englus.app.ui
 
 import android.Manifest
 import android.os.Build
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -72,9 +73,31 @@ import com.englus.app.ui.vocab.WordViewModel
 import com.englus.app.ui.writing.WritingScreen
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MaterialTheme { Root() } }
+        val shared = sharedText(intent)
+        setContent { MaterialTheme { Root(sharedText = shared) } }
+    }
+
+    /**
+     * Text arriving from another app.
+     *
+     * Both actions are handled because they are different gestures: SEND is the
+     * share sheet from a browser or a messenger, PROCESS_TEXT is the menu that
+     * appears when text is selected anywhere. Between them, any English on the
+     * phone becomes reading material without a photograph or a paste.
+     */
+    private fun sharedText(intent: Intent?): String? {
+        if (intent == null) return null
+        val text = when (intent.action) {
+            Intent.ACTION_SEND ->
+                intent.getStringExtra(Intent.EXTRA_TEXT)
+            Intent.ACTION_PROCESS_TEXT ->
+                intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
+            else -> null
+        }
+        return text?.trim()?.takeIf { it.isNotBlank() }
     }
 }
 
@@ -100,8 +123,14 @@ private enum class Tab(val route: String, val label: String, val icon: ImageVect
 }
 
 @Composable
-private fun Root() {
+private fun Root(sharedText: String? = null) {
     val nav = rememberNavController()
+
+    // Sharing into the app should land on the thing that was shared, not on the
+    // library. Keyed on the text so a rotation does not re-open it.
+    LaunchedEffect(sharedText) {
+        if (!sharedText.isNullOrBlank()) nav.navigate("reading/capture?shared=true")
+    }
 
     // Transcription progress and review reminders both post notifications.
     val askNotifications = rememberLauncherForActivityResult(
@@ -269,8 +298,20 @@ private fun Root() {
                     onBack = { nav.popBackStack() },
                 )
             }
-            composable("reading/capture") {
+            composable(
+                "reading/capture?shared={shared}",
+                arguments = listOf(
+                    navArgument("shared") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    }
+                ),
+            ) {
                 ReadingCaptureScreen(
+                    initialText = sharedText?.takeIf { _ ->
+                        it.arguments?.getString("shared") != null
+                    },
                     onBack = { nav.popBackStack() },
                     onOpen = { id ->
                         nav.popBackStack()

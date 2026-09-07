@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A sentence on the home screen.
+
+  The phone is unlocked dozens of times a day for two seconds at a time. None of
+  those moments is long enough for a study session, and together they are more
+  contact with English than any session will be.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:padding="14dp">
+
+    <TextView
+        android:id="@+id/widget_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="10sp"
+        android:textColor="#6B5B95"
+        android:text="englus" />
+
+    <TextView
+        android:id="@+id/widget_english"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textSize="15sp"
+        android:textColor="#1C1B1F"
+        android:maxLines="3"
+        android:ellipsize="end" />
+
+    <!--
+      The translation sits underneath rather than behind a tap: a widget cannot
+      hold a reveal state, and a sentence nobody understands is not exposure.
+    -->
+    <TextView
+        android:id="@+id/widget_korean"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textSize="11sp"
+        android:textColor="#5F5B66"
+        android:maxLines="2"
+        android:ellipsize="end" />
+</LinearLayout>

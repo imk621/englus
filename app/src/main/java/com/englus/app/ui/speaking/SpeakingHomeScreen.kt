@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,7 +59,7 @@ fun SpeakingHomeScreen(
 
             if (ui.missedCount > 0) {
                 item { MissedCard(ui.missedCount, onShadowMissed) }
-                item { HandsFreeCard(ui.missedCount) { vm.startHandsFree() } }
+                item { HandsFreeCard(ui, vm::startHandsFree) }
             }
 
             if (!ui.modelReady) {
@@ -170,7 +171,7 @@ private fun MissedCard(count: Int, onClick: () -> Unit) {
  * commuting alone - are exactly the times they cannot look at anything.
  */
 @Composable
-private fun HandsFreeCard(count: Int, onStart: () -> Unit) {
+private fun HandsFreeCard(ui: SpeakingHomeUi, onStart: (Boolean) -> Unit) {
     var started by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -193,9 +194,31 @@ private fun HandsFreeCard(count: Int, onStart: () -> Unit) {
             )
             Spacer(Modifier.height(10.dp))
             Button(
-                onClick = { onStart(); started = true },
+                onClick = { onStart(false); started = true },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text(if (started) "재생 중 · 잠금화면에서 조작하세요" else "${count}개로 시작") }
+            ) {
+                Text(
+                    if (started) "재생 중 · 잠금화면에서 조작하세요"
+                    else "놓친 문장 ${ui.missedCount}개로 시작"
+                )
+            }
+
+            // The same walk, aimed at the sentences today's schedule picked.
+            if (ui.dueCount > 0) {
+                Spacer(Modifier.height(6.dp))
+                OutlinedButton(
+                    onClick = { onStart(true); started = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("오늘 복습할 ${ui.dueCount}개만") }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "듣기만 하고 채점하지 않습니다. 걸으면서 '좋음/어려움'을 누를 수는 " +
+                        "없고, 아무 값이나 넣으면 복습 일정이 망가집니다. 노출을 한 번 " +
+                        "더 하는 것이지 복습을 대신하지 않습니다.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

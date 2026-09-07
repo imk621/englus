@@ -14,6 +14,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.englus.app.data.EnglusDatabase
+import com.englus.app.exposure.ExposureSettings
+import com.englus.app.exposure.SnoozeReceiver
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
@@ -35,14 +37,31 @@ class ReminderWorker(
         val now = System.currentTimeMillis()
         dao.backfill(now)
 
-        val due = runCatching { dao.due(now).size }.getOrDefault(0)
-        if (due == 0) return Result.success()
+        val exposure = ExposureSettings(applicationContext)
+        // Checked here rather than by not scheduling the work: quiet hours and a
+        // snooze are both about *now*, and the schedule was fixed days ago.
+        if (!exposure.active) return Result.success()
 
-        notify(due)
+        val cards = runCatching { dao.due(now) }.getOrDefault(emptyList())
+        if (cards.isEmpty()) return Result.success()
+
+        // The sentence itself, not a count. A notification saying "3 cards due"
+        // is an errand; one showing the English is already the exposure, and it
+        // works even when the learner does not open the app.
+        val sentence = if (exposure.notifySentences) cards.first() else null
+        notify(cards.size, sentence?.text, sentence?.translation)
         return Result.success()
     }
 
-    private fun notify(due: Int) {
+    /**
+     * Built with a named constant rather than an inline escape: a newline escape
+     * in this file has silently become a real line break more than once.
+     */
+    private fun bigText(sentence: String, translation: String?): String =
+        if (translation.isNullOrBlank()) sentence
+        else sentence + BLANK_LINE + translation
+
+    private fun notify(due: Int, sentence: String?, translation: String?) {
         val nm = applicationContext.getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm.getNotificationChannel(CHANNEL) == null) {
             nm.createNotificationChannel(
@@ -58,13 +77,37 @@ class ReminderWorker(
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
-        val notification = NotificationCompat.Builder(applicationContext, CHANNEL)
-            .setContentTitle("복습할 문장 ${due}개")
-            .setContentText("못 알아들었던 문장을 다시 들어볼 시간입니다.")
+        val snooze = PendingIntent.getBroadcast(
+            applicationContext,
+            1,
+            Intent(applicationContext, SnoozeReceiver::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+
+        val builder = NotificationCompat.Builder(applicationContext, CHANNEL)
             .setSmallIcon(com.englus.app.R.drawable.ic_stat_transcribe)
             .setContentIntent(open)
             .setAutoCancel(true)
-            .build()
+            // One tap to stop it for today. Without this the only way to silence
+            // a notification is to turn the channel off, and it never comes back.
+            .addAction(0, "오늘은 그만", snooze)
+
+        if (sentence != null) {
+            builder.setContentTitle(sentence)
+            builder.setContentText(translation ?: "복습할 문장 ${due}개")
+            // Expanded so a long sentence is readable from the shade itself,
+            // without opening anything.
+            builder.setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText(bigText(sentence, translation))
+                    .setSummaryText("복습 ${due}개")
+            )
+        } else {
+            builder.setContentTitle("복습할 문장 ${due}개")
+            builder.setContentText("못 알아들었던 문장을 다시 들어볼 시간입니다.")
+        }
+
+        val notification = builder.build()
 
         // Silently ignored when the user declined notifications, which is fine —
         // the app must not depend on the reminder to be usable.
@@ -74,6 +117,14 @@ class ReminderWorker(
     }
 
     companion object {
+        /**
+         * Built from char codes, not an escape. This project already does the
+         * same for the record separators in Converters, for the same reason:
+         * an escape here has been turned into a real line break by tooling
+         * more than once, and the compiler error it causes is confusing.
+         */
+        private val BLANK_LINE: String = "" + 10.toChar() + 10.toChar()
+
         private const val CHANNEL = "review"
         private const val NOTIFICATION_ID = 44
         private const val WORK_NAME = "daily-review-reminder"

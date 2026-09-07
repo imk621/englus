@@ -54,6 +54,21 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.ui.platform.LocalContext
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.Lifecycle
+import androidx.compose.material3.Switch
+import com.englus.app.widget.SentenceWidget
+import com.englus.app.exposure.ExposureSettings
+
+data class ExposureUi(
+    val enabled: Boolean = true,
+    val notifySentences: Boolean = true,
+    val widgetSentences: Boolean = true,
+    val quietFrom: Int = 22,
+    val quietTo: Int = 8,
+    val snoozed: Boolean = false,
+    val status: String = "",
+)
 
 data class BackupUi(
     val busy: String? = null,
@@ -75,12 +90,14 @@ data class SettingsUi(
     val message: String? = null,
     val error: String? = null,
     val backup: BackupUi = BackupUi(),
+    val exposure: ExposureUi = ExposureUi(),
 )
 
 class SettingsViewModel(app: Application) : AndroidViewModel(app) {
 
     private val explain = (app as EnglusApp).explain
     private val backups = BackupRepository(app)
+    private val exposure = ExposureSettings(app)
 
     private val _ui = MutableStateFlow(
         SettingsUi(
@@ -107,6 +124,61 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun selectModel(m: String) {
         explain.settings.model = m
         _ui.update { it.copy(model = m, message = "모델을 $m 으로 설정했습니다.") }
+    }
+
+    /**
+     * Re-read whenever the screen appears: quiet hours and a snooze both expire
+     * on their own, so a snapshot goes stale while the screen is open.
+     */
+    fun refreshExposure() = _ui.update {
+        it.copy(
+            exposure = ExposureUi(
+                enabled = exposure.enabled,
+                notifySentences = exposure.notifySentences,
+                widgetSentences = exposure.widgetSentences,
+                quietFrom = exposure.quietFromHour,
+                quietTo = exposure.quietToHour,
+                snoozed = exposure.snoozed,
+                status = exposure.status(),
+            )
+        )
+    }
+
+    fun setExposureEnabled(v: Boolean) {
+        exposure.enabled = v
+        applyExposure()
+    }
+
+    fun setNotifySentences(v: Boolean) {
+        exposure.notifySentences = v
+        applyExposure()
+    }
+
+    fun setWidgetSentences(v: Boolean) {
+        exposure.widgetSentences = v
+        applyExposure()
+    }
+
+    fun setQuietHours(from: Int, to: Int) {
+        exposure.quietFromHour = from
+        exposure.quietToHour = to
+        applyExposure()
+    }
+
+    fun snoozeForToday() {
+        exposure.snoozeForToday()
+        applyExposure()
+    }
+
+    fun resumeExposure() {
+        exposure.resume()
+        applyExposure()
+    }
+
+    /** The widget is pushed immediately: the value of an off switch is that it is now. */
+    private fun applyExposure() {
+        SentenceWidget.refresh(getApplication())
+        refreshExposure()
     }
 
     fun suggestedBackupName(): String =
@@ -346,6 +418,8 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
                 )
             }
 
+            item { ExposureSection(ui.exposure, vm) }
+
             item { BackupSection(ui.backup, vm) }
 
             item {
@@ -516,3 +590,101 @@ private fun BackupSection(backup: BackupUi, vm: SettingsViewModel) {
         )
     }
 }
+
+/**
+ * Turning the ambient features off.
+ *
+ * Placed above backup because it is the control people reach for in a hurry -
+ * in a meeting, at dinner, with a sleeping child in the room. Three levels,
+ * because "not now" and "not ever" are different requests and offering only the
+ * second means the feature gets switched off once and never returns.
+ */
+@Composable
+private fun ExposureSection(exposure: ExposureUi, vm: SettingsViewModel) {
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refreshExposure() }
+
+    Column(Modifier.padding(top = 10.dp)) {
+        Text("영어 노출", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "홈 화면 위젯과 알림이 먼저 말을 거는 기능입니다. 재생과 핸즈프리는 " +
+                "직접 눌러야 시작하므로 여기서 다루지 않습니다 - 멈추려면 일시정지를 " +
+                "누르면 됩니다.",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("먼저 말 걸기", fontSize = 14.sp)
+                Text(
+                    exposure.status(),
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = exposure.enabled, onCheckedChange = vm::setExposureEnabled)
+        }
+
+        if (exposure.enabled) {
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (exposure.snoozed) {
+                    OutlinedButton(onClick = vm::resumeExposure, modifier = Modifier.weight(1f)) {
+                        Text("지금 다시 켜기", fontSize = 13.sp)
+                    }
+                } else {
+                    OutlinedButton(onClick = vm::snoozeForToday, modifier = Modifier.weight(1f)) {
+                        Text("오늘은 그만", fontSize = 13.sp)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("알림에 문장 띄우기", Modifier.weight(1f), fontSize = 13.sp)
+                Switch(checked = exposure.notifySentences, onCheckedChange = vm::setNotifySentences)
+            }
+            Text(
+                "끄면 '복습할 문장 N개'만 뜹니다. 켜면 알림을 보는 순간이 곧 한 번 " +
+                    "읽는 것이 됩니다.",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("위젯에 문장 띄우기", Modifier.weight(1f), fontSize = 13.sp)
+                Switch(checked = exposure.widgetSentences, onCheckedChange = vm::setWidgetSentences)
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Text("방해 금지 시간", fontSize = 13.sp)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "이 시간에는 위젯도 알림도 조용합니다. 자는 동안 폰이 영어로 " +
+                    "켜지는 일은 없어야 합니다.",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(
+                    Triple("없음", 0, 0),
+                    Triple("22-8시", 22, 8),
+                    Triple("23-7시", 23, 7),
+                    Triple("21-9시", 21, 9),
+                ).forEach { (label, from, to) ->
+                    FilterChip(
+                        selected = exposure.quietFrom == from && exposure.quietTo == to,
+                        onClick = { vm.setQuietHours(from, to) },
+                        label = { Text(label, fontSize = 11.sp) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun ExposureUi.status(): String = status

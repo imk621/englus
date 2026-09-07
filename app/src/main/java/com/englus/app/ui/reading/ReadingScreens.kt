@@ -51,16 +51,25 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.englus.app.data.Sentence
 import com.englus.app.ui.common.ExplainSection
+import androidx.compose.runtime.LaunchedEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReadingCaptureScreen(
     onBack: () -> Unit,
     onOpen: (Long) -> Unit,
+    /** Text handed over by another app through the share sheet. */
+    initialText: String? = null,
     vm: ReadingCaptureViewModel = viewModel(),
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // Filled in once. Re-applying on every recomposition would fight the user
+    // as they edit what was shared.
+    LaunchedEffect(initialText) {
+        if (!initialText.isNullOrBlank()) vm.setPasted(initialText)
+    }
 
     // Kept in composition so the camera result can be read back from the same
     // file the contract was handed.

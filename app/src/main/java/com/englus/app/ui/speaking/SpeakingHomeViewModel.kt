@@ -36,6 +36,8 @@ data class SpeakingHomeUi(
     val liveEnabled: Boolean = false,
     /** Saved sentences that still have audio to imitate. */
     val missedCount: Int = 0,
+    /** Of those, the ones spaced repetition says are ripe today. */
+    val dueCount: Int = 0,
 )
 
 /**
@@ -58,7 +60,17 @@ class SpeakingHomeViewModel(app: Application) : AndroidViewModel(app) {
         db.speaking().observeCount(),
         db.speaking().observeOverallAverage(),
         db.dictation().observeSaved(),
-    ) { episodes, progress, count, average, saved ->
+        db.reviews().observeDueCount(System.currentTimeMillis()),
+    ) { values ->
+        @Suppress("UNCHECKED_CAST")
+        val episodes = values[0] as List<Episode>
+        @Suppress("UNCHECKED_CAST")
+        val progress = values[1] as List<com.englus.app.data.SpeakingProgress>
+        val count = values[2] as Int
+        val average = values[3] as Float?
+        @Suppress("UNCHECKED_CAST")
+        val saved = values[4] as List<SavedSentence>
+        val due = values[5] as Int
         val byEpisode = progress.associateBy { it.episodeId }
         SpeakingHomeUi(
             // Shadowing needs audio to imitate, so reading material is not a
@@ -79,6 +91,7 @@ class SpeakingHomeViewModel(app: Application) : AndroidViewModel(app) {
             missedCount = saved.count {
                 it.audioPath.isNotBlank() && it.sentence.endMs > it.sentence.startMs
             },
+            dueCount = due,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SpeakingHomeUi())
 
@@ -89,11 +102,9 @@ class SpeakingHomeViewModel(app: Application) : AndroidViewModel(app) {
      * screen being switched off, which is the entire point: this is meant to be
      * started and then put in a pocket.
      */
-    fun startHandsFree() {
+    fun startHandsFree(dueOnly: Boolean = false) {
         viewModelScope.launch {
-            val clips = db.dictation().observeSaved().first()
-                .filter { it.audioPath.isNotBlank() && it.sentence.endMs > it.sentence.startMs }
-                .map { it.toClip() }
+            val clips = if (dueOnly) dueClips() else savedClips()
             if (clips.isEmpty()) return@launch
 
             val controller = PlaybackConnection.await(getApplication())
@@ -102,6 +113,32 @@ class SpeakingHomeViewModel(app: Application) : AndroidViewModel(app) {
             controller.play()
         }
     }
+
+    private suspend fun savedClips(): List<HandsFreeClip> =
+        db.dictation().observeSaved().first()
+            .filter { it.audioPath.isNotBlank() && it.sentence.endMs > it.sentence.startMs }
+            .map { it.toClip() }
+
+    /**
+     * The cards spaced repetition says are ripe today.
+     *
+     * Nothing here is graded - a walk cannot produce a rating, and inventing one
+     * would corrupt the schedule that the grading exists to build. This is extra
+     * contact with the right sentences on the right day, not a review session,
+     * and the screen says so.
+     */
+    private suspend fun dueClips(): List<HandsFreeClip> =
+        db.reviews().due(System.currentTimeMillis())
+            .filter { it.audioPath.isNotBlank() && it.endMs > it.startMs }
+            .map {
+                HandsFreeClip(
+                    text = it.text,
+                    audioPath = it.audioPath,
+                    startMs = it.startMs,
+                    endMs = it.endMs,
+                    source = it.episodeTitle,
+                )
+            }
 
     private fun SavedSentence.toClip() = HandsFreeClip(
         text = sentence.text,
