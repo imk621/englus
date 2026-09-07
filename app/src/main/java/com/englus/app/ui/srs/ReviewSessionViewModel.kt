@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
+import com.englus.app.playback.PlaybackConnection
 
 data class SessionUi(
     val loading: Boolean = true,
@@ -77,6 +78,7 @@ class ReviewSessionViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun play() {
+        PlaybackConnection.pause()
         val due = _card.value ?: return
         val file = File(due.audioPath)
         if (!file.exists()) return

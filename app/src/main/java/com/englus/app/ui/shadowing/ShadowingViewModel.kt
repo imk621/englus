@@ -30,6 +30,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import com.englus.app.playback.PlaybackConnection
 
 /** One sentence to shadow, with the audio it came from. */
 data class ShadowItem(
@@ -168,6 +169,7 @@ class ShadowingViewModel(
     }
 
     fun playCurrent() {
+        PlaybackConnection.pause()
         val item = _items.value.getOrNull(_ui.value.index) ?: return
         val file = File(item.audioPath)
         if (!file.exists()) return

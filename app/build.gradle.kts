@@ -79,6 +79,10 @@ dependencies {
 
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-common:1.4.1")
+    // Lock-screen and headphone controls, and playback that survives leaving the
+    // app. Without a session the player dies with the ViewModel, which rules out
+    // every minute the phone is in a pocket - the majority of listening time.
+    implementation("androidx.media3:media3-session:1.4.1")
 
     // On-device en->ko translation. Free, offline, unlimited — which is what
     // bulk-translating 500 sentences per episode needs. Cloud models read

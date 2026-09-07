@@ -7,7 +7,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.common.MediaMetadata
+import com.englus.app.playback.PlaybackConnection
 import com.englus.app.EnglusApp
 import com.englus.app.data.Episode
 import com.englus.app.data.Sentence
@@ -75,13 +76,15 @@ class PlayerViewModel(
     private val _ui = MutableStateFlow(PlayerUi(syncOffsetMs = prefs.getInt(KEY_SYNC, 0)))
     val ui: StateFlow<PlayerUi> = _ui.asStateFlow()
 
-    val player: ExoPlayer = ExoPlayer.Builder(app).build().apply {
-        addListener(object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                _ui.update { it.copy(playing = isPlaying) }
-            }
-        })
-    }
+    /**
+     * The shared session player, not one of this screen's own.
+     *
+     * A player owned here would be released when the screen goes away, which is
+     * exactly the moment the phone goes into a pocket and the listening should
+     * carry on. Null until the connection is established, so every use is
+     * guarded - the alternative is blocking the first frame on an IPC round trip.
+     */
+    private var player: Player? = null
 
     val explainConfigured: Boolean get() = explainRepo.configured
 
@@ -115,6 +118,16 @@ class PlayerViewModel(
 
     init {
         viewModelScope.launch {
+            val controller = PlaybackConnection.await(getApplication())
+            player = controller
+            controller.addListener(object : Player.Listener {
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    _ui.update { it.copy(playing = isPlaying) }
+                }
+            })
+            _ui.update { it.copy(playing = controller.isPlaying) }
+        }
+        viewModelScope.launch {
             repo.observeEpisode(episodeId).collect { ep ->
                 if (ep != null && ep.translationState != com.englus.app.data.TranslationState.DONE) {
                     // Covers episodes transcribed before translation existed,
@@ -122,9 +135,28 @@ class PlayerViewModel(
                     repo.enqueueTranslation(episodeId)
                 }
                 if (ep != null && !prepared) {
+                    val controller = PlaybackConnection.await(getApplication())
                     prepared = true
-                    player.setMediaItem(MediaItem.fromUri(Uri.fromFile(File(ep.audioPath))))
-                    player.prepare()
+                    // Re-opening the episode that is already playing must not
+                    // restart it: coming back to the screen after a walk should
+                    // land where the listening got to, not at zero.
+                    val uri = Uri.fromFile(File(ep.audioPath)).toString()
+                    val already = controller.currentMediaItem
+                        ?.localConfiguration?.uri?.toString() == uri
+                    if (!already) {
+                        controller.setMediaItem(
+                            MediaItem.Builder()
+                                .setUri(uri)
+                                .setMediaMetadata(
+                                    MediaMetadata.Builder()
+                                        .setTitle(ep.title)
+                                        .setArtist("englus")
+                                        .build()
+                                )
+                                .build()
+                        )
+                        controller.prepare()
+                    }
                 }
             }
         }
@@ -138,12 +170,12 @@ class PlayerViewModel(
      */
     private suspend fun trackPosition() {
         while (true) {
-            val pos = player.currentPosition
+            val pos = player?.currentPosition ?: 0L
             _ui.update { it.copy(positionMs = pos) }
 
-            if (_ui.value.repeatSentence && player.isPlaying) {
+            if (_ui.value.repeatSentence && player?.isPlaying == true) {
                 val s = currentSentence(pos)
-                if (s != null && transcriptTime(pos) >= s.endMs) player.seekTo(mediaTime(s.startMs))
+                if (s != null && transcriptTime(pos) >= s.endMs) player?.seekTo(mediaTime(s.startMs))
             }
             delay(50)
         }
@@ -178,11 +210,15 @@ class PlayerViewModel(
         return if (i >= 0 && target <= sentence.words[i].endMs + WORD_HOLD_MS) i else -1
     }
 
-    fun playPause() = if (player.isPlaying) player.pause() else player.play()
+    fun playPause() {
+        val p = player ?: return
+        if (p.isPlaying) p.pause() else p.play()
+    }
 
     fun seekToSentence(s: Sentence) {
-        player.seekTo(mediaTime(s.startMs))
-        if (!player.isPlaying) player.play()
+        val p = player ?: return
+        p.seekTo(mediaTime(s.startMs))
+        if (!p.isPlaying) p.play()
     }
 
     fun toggleSync() = _ui.update { it.copy(showSync = !it.showSync) }
@@ -207,7 +243,7 @@ class PlayerViewModel(
     }
 
     fun setSpeed(v: Float) {
-        player.playbackParameters = PlaybackParameters(v)
+        player?.playbackParameters = PlaybackParameters(v)
         _ui.update { it.copy(speed = v) }
     }
 
@@ -229,8 +265,12 @@ class PlayerViewModel(
         viewModelScope.launch { repo.setSaved(s.id, !s.saved) }
     }
 
+    /**
+     * The player is not released here. It belongs to the service, and the whole
+     * point is that closing this screen does not stop the audio.
+     */
     override fun onCleared() {
-        player.release()
+        player = null
         super.onCleared()
     }
 

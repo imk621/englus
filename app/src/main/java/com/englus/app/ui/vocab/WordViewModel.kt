@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
+import com.englus.app.playback.PlaybackConnection
 
 data class WordUi(
     val lemma: String = "",
@@ -66,6 +67,7 @@ class WordViewModel(app: Application, private val lemma: String) : AndroidViewMo
     }
 
     fun play(item: SavedSentence, slow: Boolean = false) {
+        PlaybackConnection.pause()
         val file = File(item.audioPath)
         // Reading material and restored-without-audio episodes have no file.
         if (item.audioPath.isBlank() || !file.exists()) return

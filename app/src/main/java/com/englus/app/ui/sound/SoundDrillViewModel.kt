@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
+import com.englus.app.playback.PlaybackConnection
 
 /** One drillable pattern with how much of the learner's own material it covers. */
 data class PatternSummary(
@@ -128,6 +129,7 @@ class SoundDrillViewModel(
     }
 
     fun play(slow: Boolean = _ui.value.slow) {
+        PlaybackConnection.pause()
         val item = _current.value ?: return
         val file = File(item.audioPath)
         if (!file.exists()) return

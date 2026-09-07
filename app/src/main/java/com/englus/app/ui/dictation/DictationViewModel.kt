@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
+import com.englus.app.playback.PlaybackConnection
 
 enum class Phase {
     /** Listening and typing. */
@@ -124,6 +125,9 @@ class DictationViewModel(
     }
 
     fun playCurrent(slow: Boolean = _ui.value.slow) {
+        // Two players in one app do not negotiate: audio focus is granted per
+        // app, so a background episode would simply talk over this clip.
+        PlaybackConnection.pause()
         val s = current() ?: return
         // Whisper's boundaries run a little early and can clip the final word, so
         // pad both ends; the head pad is harmless, the tail pad is not optional.
