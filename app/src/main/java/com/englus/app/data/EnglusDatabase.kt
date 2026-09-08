@@ -444,6 +444,43 @@ interface ConversationDao {
 }
 
 @Dao
+interface DailyDao {
+
+    @Insert
+    suspend fun insert(sentences: List<DailySentence>)
+
+    @Update
+    suspend fun update(sentence: DailySentence)
+
+    @Query("SELECT * FROM daily_sentences WHERE dateKey = :dateKey ORDER BY position")
+    fun observeForDate(dateKey: Int): Flow<List<DailySentence>>
+
+    @Query("SELECT * FROM daily_sentences WHERE dateKey = :dateKey ORDER BY position")
+    suspend fun forDate(dateKey: Int): List<DailySentence>
+
+    @Query("SELECT COUNT(*) FROM daily_sentences WHERE dateKey = :dateKey")
+    suspend fun countForDate(dateKey: Int): Int
+
+    @Query("SELECT * FROM daily_sentences WHERE id = :id")
+    suspend fun get(id: Long): DailySentence?
+
+    /** Recent English, so a new day is not a paraphrase of the last one. */
+    @Query("SELECT english FROM daily_sentences ORDER BY createdAt DESC LIMIT :limit")
+    suspend fun recentEnglish(limit: Int = 20): List<String>
+
+    /** Newest first, for the widget and the history list. */
+    @Query("SELECT * FROM daily_sentences ORDER BY createdAt DESC LIMIT :limit")
+    fun observeRecent(limit: Int = 30): Flow<List<DailySentence>>
+
+    @Query("SELECT * FROM daily_sentences ORDER BY createdAt DESC LIMIT :limit")
+    suspend fun recent(limit: Int = 30): List<DailySentence>
+
+    /** Old sets are not worth keeping: the point was that day's weak words. */
+    @Query("DELETE FROM daily_sentences WHERE createdAt < :before AND writtenAt IS NULL AND spokenAt IS NULL")
+    suspend fun pruneUntouched(before: Long)
+}
+
+@Dao
 interface FeedDao {
 
     @Query("SELECT * FROM podcasts ORDER BY addedAt DESC")
@@ -499,8 +536,9 @@ interface FeedDao {
         ExamSession::class, ExamQuestion::class,
         VocabWord::class,
         Conversation::class, ConversationTurn::class,
+        DailySentence::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = true,
 )
 @TypeConverters(
@@ -521,6 +559,7 @@ abstract class EnglusDatabase : RoomDatabase() {
     abstract fun exams(): ExamDao
     abstract fun vocab(): VocabDao
     abstract fun conversations(): ConversationDao
+    abstract fun daily(): DailyDao
 
     companion object {
         @Volatile private var instance: EnglusDatabase? = null
@@ -883,12 +922,40 @@ abstract class EnglusDatabase : RoomDatabase() {
             instance = null
         }
 
+        /** Adds the generated daily set. Additive. */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `daily_sentences` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`dateKey` INTEGER NOT NULL, " +
+                        "`position` INTEGER NOT NULL, " +
+                        "`korean` TEXT NOT NULL, " +
+                        "`english` TEXT NOT NULL, " +
+                        "`targetWords` TEXT NOT NULL, " +
+                        "`note` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, " +
+                        "`writtenAt` INTEGER, " +
+                        "`spokenAt` INTEGER, " +
+                        "`speakingAccuracy` REAL)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_daily_sentences_dateKey` " +
+                        "ON `daily_sentences` (`dateKey`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_daily_sentences_createdAt` " +
+                        "ON `daily_sentences` (`createdAt`)"
+                )
+            }
+        }
+
         fun get(context: Context): EnglusDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 EnglusDatabase::class.java,
                 NAME,
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13).build().also { instance = it }
         }
     }
 }

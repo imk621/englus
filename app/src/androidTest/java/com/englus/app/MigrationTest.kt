@@ -493,6 +493,38 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate12To13AddsDailySentences() {
+        helper.createDatabase(TEST_DB, 1).close()
+        helper.runMigrationsAndValidate(
+            TEST_DB, 12, true,
+            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
+            MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+            MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
+        ).close()
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 13, true, MIGRATION_12_13)
+
+        db.execSQL(
+            "INSERT INTO daily_sentences " +
+                "(dateKey, position, korean, english, targetWords, note, createdAt) " +
+                "VALUES (20260909, 0, '어제 그 가게 일찍 열었어', " +
+                "'That shop opened early yesterday', 'shop, early', '시제에 주의', 1)"
+        )
+        // Untouched until worked on: the three timestamps are what the writing
+        // and speaking cards advance through.
+        db.query("SELECT writtenAt, spokenAt, speakingAccuracy FROM daily_sentences").use { c ->
+            assertTrue(c.moveToFirst())
+            assertTrue("writtenAt should start empty", c.isNull(0))
+            assertTrue("spokenAt should start empty", c.isNull(1))
+            assertTrue("accuracy should start empty", c.isNull(2))
+        }
+        db.query("SELECT COUNT(*) FROM daily_sentences WHERE dateKey = 20260909").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(1, c.getInt(0))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
         val MIGRATION_1_2 = EnglusDatabase.MIGRATION_1_2
@@ -506,5 +538,6 @@ class MigrationTest {
         val MIGRATION_9_10 = EnglusDatabase.MIGRATION_9_10
         val MIGRATION_10_11 = EnglusDatabase.MIGRATION_10_11
         val MIGRATION_11_12 = EnglusDatabase.MIGRATION_11_12
+        val MIGRATION_12_13 = EnglusDatabase.MIGRATION_12_13
     }
 }

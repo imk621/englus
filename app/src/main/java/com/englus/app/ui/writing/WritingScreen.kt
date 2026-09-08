@@ -43,6 +43,9 @@ import com.englus.app.data.WritingMistake
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.lifecycle.viewmodel.initializer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,6 +77,27 @@ fun WritingScreen(
             Modifier.fillMaxSize().padding(pad).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            item {
+                val application = LocalContext.current.applicationContext as android.app.Application
+                val daily: com.englus.app.ui.daily.DailyViewModel = viewModel(
+                    key = "daily",
+                    factory = viewModelFactory {
+                        initializer { com.englus.app.ui.daily.DailyViewModel(application) }
+                    },
+                )
+                com.englus.app.ui.daily.DailyTaskCard(
+                    vm = daily,
+                    actionLabel = "이 문장 영작하기",
+                    onStart = { sentence ->
+                        // Straight into the existing correction flow: the prompt
+                        // is the Korean, and the model answer stays hidden until
+                        // after the attempt is graded.
+                        vm.setPrompt(sentence.korean)
+                        daily.markWritten(sentence.id)
+                    },
+                )
+            }
+
             if (!vm.configured) {
                 item {
                     Card(

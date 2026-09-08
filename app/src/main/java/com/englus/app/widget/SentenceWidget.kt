@@ -69,29 +69,42 @@ class SentenceWidget : AppWidgetProvider() {
         // The database read cannot happen on the broadcast thread; the widget is
         // filled in as soon as it comes back.
         scope.launch {
-            val saved = runCatching {
-                EnglusDatabase.get(context).dictation().observeSaved().first()
-            }.getOrDefault(emptyList())
+            val db = EnglusDatabase.get(context)
+            val saved = runCatching { db.dictation().observeSaved().first() }
+                .getOrDefault(emptyList())
+                .map {
+                    Card(it.episodeTitle, it.sentence.text, it.sentence.translation.orEmpty())
+                }
 
-            if (saved.isEmpty()) {
+            // Generated sentences are labelled so they are never mistaken for
+            // material the learner actually met. They have no audio behind them,
+            // which is the difference that matters.
+            val generated = if (!settings.generatedSentences) emptyList()
+            else runCatching { db.daily().recent(10) }
+                .getOrDefault(emptyList())
+                .map { Card("오늘의 문장 · 생성", it.english, it.korean) }
+
+            val pool = saved + generated
+
+            if (pool.isEmpty()) {
                 views.setTextViewText(R.id.widget_label, "englus")
-                views.setTextViewText(R.id.widget_english, "아직 저장된 문장이 없습니다")
+                views.setTextViewText(R.id.widget_english, "아직 보여줄 문장이 없습니다")
                 views.setTextViewText(R.id.widget_korean, "받아쓰기에서 놓친 문장이 여기 올라옵니다")
             } else {
                 // Rotates on its own without storing a cursor: the widget updates
                 // on a half-hour cadence, so the half-hour is the seed.
-                val index = ((System.currentTimeMillis() / 1_800_000L) % saved.size).toInt()
-                val item = saved[index]
-                views.setTextViewText(R.id.widget_label, item.episodeTitle)
-                views.setTextViewText(R.id.widget_english, item.sentence.text)
-                views.setTextViewText(
-                    R.id.widget_korean,
-                    item.sentence.translation.orEmpty(),
-                )
+                val index = ((System.currentTimeMillis() / 1_800_000L) % pool.size).toInt()
+                val item = pool[index]
+                views.setTextViewText(R.id.widget_label, item.label)
+                views.setTextViewText(R.id.widget_english, item.english)
+                views.setTextViewText(R.id.widget_korean, item.korean)
             }
             manager.updateAppWidget(id, views)
         }
     }
+
+    /** One row of the rotation, whatever it came from. */
+    private data class Card(val label: String, val english: String, val korean: String)
 
     private fun openApp(context: Context): PendingIntent = PendingIntent.getActivity(
         context,

@@ -41,6 +41,8 @@ import androidx.navigation.navArgument
 import com.englus.app.data.EpisodeKind
 import com.englus.app.ui.dictation.DictationScreen
 import com.englus.app.ui.dictation.DictationViewModel
+import com.englus.app.ui.daily.DailySpeakScreen
+import com.englus.app.ui.daily.DailySpeakViewModel
 import com.englus.app.ui.level.LevelScreen
 import com.englus.app.ui.level.LevelViewModel
 import com.englus.app.ui.library.LibraryScreen
@@ -196,8 +198,21 @@ private fun Root(sharedText: String? = null) {
                     vm = vm,
                     onShadow = { episodeId -> nav.navigate("shadowing/$episodeId/0") },
                     onShadowMissed = { nav.navigate("shadowing/saved") },
+                    onDailySpeak = { id -> nav.navigate("daily/speak/$id") },
                     onLive = { nav.navigate("live") },
                 )
+            }
+            composable(
+                "daily/speak/{sentenceId}",
+                arguments = listOf(navArgument("sentenceId") { type = NavType.LongType }),
+            ) { e ->
+                val id = e.arguments?.getLong("sentenceId") ?: return@composable
+                val application = app()
+                val vm: DailySpeakViewModel = viewModel(
+                    key = "daily-speak-$id",
+                    factory = viewModelFactory { initializer { DailySpeakViewModel(application, id) } },
+                )
+                DailySpeakScreen(vm = vm, onBack = { nav.popBackStack() })
             }
             composable("live") {
                 val application = app()

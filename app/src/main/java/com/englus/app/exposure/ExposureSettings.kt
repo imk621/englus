@@ -43,6 +43,19 @@ class ExposureSettings(context: Context) {
         get() = prefs.getBoolean(KEY_WIDGET, true)
         set(value) = prefs.edit().putBoolean(KEY_WIDGET, value).apply()
 
+    /**
+     * Generated sentences on the widget and in the daily notification.
+     *
+     * Kept as its own switch rather than folded into the others because it is a
+     * different kind of material. Everything else the widget shows is a real
+     * sentence the learner failed, with audio behind it; these are made to order
+     * and have no recording. They are labelled as such on screen, and this turns
+     * them off without turning off the widget.
+     */
+    var generatedSentences: Boolean
+        get() = prefs.getBoolean(KEY_GENERATED, true)
+        set(value) = prefs.edit().putBoolean(KEY_GENERATED, value).apply()
+
     var quietFromHour: Int
         get() = prefs.getInt(KEY_QUIET_FROM, 22)
         set(value) = prefs.edit().putInt(KEY_QUIET_FROM, value.coerceIn(0, 23)).apply()
@@ -105,6 +118,7 @@ class ExposureSettings(context: Context) {
         const val KEY_ENABLED = "enabled"
         const val KEY_NOTIFY = "notifySentences"
         const val KEY_WIDGET = "widgetSentences"
+        const val KEY_GENERATED = "generatedSentences"
         const val KEY_QUIET_FROM = "quietFrom"
         const val KEY_QUIET_TO = "quietTo"
         const val KEY_SNOOZE = "snoozeUntil"

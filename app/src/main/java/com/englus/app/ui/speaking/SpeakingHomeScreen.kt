@@ -35,6 +35,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
+import com.englus.app.ui.daily.DailyViewModel
+import com.englus.app.ui.daily.DailyTaskCard
+import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,6 +48,7 @@ fun SpeakingHomeScreen(
     vm: SpeakingHomeViewModel,
     onShadow: (Long) -> Unit,
     onShadowMissed: () -> Unit,
+    onDailySpeak: (Long) -> Unit,
     onLive: () -> Unit,
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
@@ -55,6 +62,20 @@ fun SpeakingHomeScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            item {
+                val application = LocalContext.current.applicationContext as android.app.Application
+                val daily: DailyViewModel = viewModel(
+                    key = "daily",
+                    factory = viewModelFactory { initializer { DailyViewModel(application) } },
+                )
+                DailyTaskCard(
+                    vm = daily,
+                    actionLabel = "이 문장 말하기",
+                    forSpeaking = true,
+                    onStart = { onDailySpeak(it.id) },
+                )
+            }
+
             item { ShadowingIntro(ui) }
 
             if (ui.missedCount > 0) {

@@ -2,6 +2,8 @@ package com.englus.app
 
 import android.app.Application
 import com.englus.app.asr.ModelStore
+import com.englus.app.daily.DailyRepository
+import com.englus.app.daily.DailyWorker
 import com.englus.app.data.EpisodeRepository
 import com.englus.app.feed.FeedRepository
 import com.englus.app.gemini.ExplainRepository
@@ -31,11 +33,14 @@ class EnglusApp : Application() {
     val exams: ExamRepository by lazy { ExamRepository(this) }
     val vocab: VocabRepository by lazy { VocabRepository(this) }
     val live: LiveRepository by lazy { LiveRepository(this) }
+    val daily: DailyRepository by lazy { DailyRepository(this) }
 
     override fun onCreate() {
         super.onCreate()
         ReminderWorker.schedule(this)
         // Only when asked for: it spends data and battery unprompted.
         if (MaterialSettings(this).enabled) MaterialWorker.schedule(this)
+        // Only once a key exists; without one it would retry every day forever.
+        if (daily.configured) DailyWorker.schedule(this)
     }
 }

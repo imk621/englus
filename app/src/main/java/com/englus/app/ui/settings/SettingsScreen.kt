@@ -76,6 +76,7 @@ data class ExposureUi(
     val enabled: Boolean = true,
     val notifySentences: Boolean = true,
     val widgetSentences: Boolean = true,
+    val generatedSentences: Boolean = true,
     val quietFrom: Int = 22,
     val quietTo: Int = 8,
     val snoozed: Boolean = false,
@@ -151,6 +152,7 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
                 enabled = exposure.enabled,
                 notifySentences = exposure.notifySentences,
                 widgetSentences = exposure.widgetSentences,
+                generatedSentences = exposure.generatedSentences,
                 quietFrom = exposure.quietFromHour,
                 quietTo = exposure.quietToHour,
                 snoozed = exposure.snoozed,
@@ -195,6 +197,11 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setWidgetSentences(v: Boolean) {
         exposure.widgetSentences = v
+        applyExposure()
+    }
+
+    fun setGeneratedSentences(v: Boolean) {
+        exposure.generatedSentences = v
         applyExposure()
     }
 
@@ -699,6 +706,22 @@ private fun ExposureSection(exposure: ExposureUi, vm: SettingsViewModel) {
                 Text("위젯에 문장 띄우기", Modifier.weight(1f), fontSize = 13.sp)
                 Switch(checked = exposure.widgetSentences, onCheckedChange = vm::setWidgetSentences)
             }
+
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("생성 문장도 섞기", Modifier.weight(1f), fontSize = 13.sp)
+                Switch(
+                    checked = exposure.generatedSentences,
+                    onCheckedChange = vm::setGeneratedSentences,
+                )
+            }
+            Text(
+                "오늘의 문장을 위젯과 알림에도 띄웁니다. 나머지는 실제로 놓친 문장이라 " +
+                    "뒤에 오디오가 있지만 이건 없습니다. 그래서 화면에 '생성'이라고 " +
+                    "표시되고, 이 스위치로 따로 끌 수 있습니다.",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             Spacer(Modifier.height(12.dp))
             Text("방해 금지 시간", fontSize = 13.sp)
