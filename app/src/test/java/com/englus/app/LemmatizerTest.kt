@@ -9,15 +9,17 @@ import java.io.File
 
 /** The real bundled list, so the tests exercise the vetoes that make stripping safe. */
 object RealRanks : WordRanks {
-    private val map: Map<String, Int> = File("src/main/assets/en_freq_10k.txt")
+    private val ordered: List<String> = File("src/main/assets/en_freq_10k.txt")
         .readLines()
         .map { it.trim() }
         .filter { it.isNotEmpty() }
-        .withIndex()
-        .associate { (i, w) -> w to i + 1 }
+
+    private val map: Map<String, Int> =
+        ordered.withIndex().associate { (i, w) -> w to i + 1 }
 
     override fun rank(word: String): Int? = map[word]
-    override val size: Int get() = map.size
+    override val size: Int get() = ordered.size
+    override fun wordAt(rank: Int): String? = ordered.getOrNull(rank - 1)
 }
 
 class LemmatizerTest {

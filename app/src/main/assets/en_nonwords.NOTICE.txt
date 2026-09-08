@@ -1,0 +1,12 @@
+en_nonwords.txt — control items for the vocabulary level test.
+
+None of these is an English word. They were built from Latinate stems and real
+English suffixes so that they have the shape of genuine low-frequency English,
+and every one was checked against dwyl/english-words (words_alpha, ~370,000
+entries) and rejected if it appeared there, contained a real word of five or
+more letters, or ended in one. No two share a stem.
+
+They exist because a yes/no vocabulary test taken at face value measures
+confidence rather than knowledge. Saying "yes" to these is the only way to see
+how much of the rest of the answers is overclaiming, and the score is corrected
+by that rate.

@@ -51,6 +51,7 @@ fun ReviewScreen(
     onStartSession: () -> Unit,
     onSoundDrills: () -> Unit,
     onVocab: () -> Unit,
+    onLevelTest: () -> Unit,
     vm: ReviewViewModel = viewModel(),
 ) {
     val items by vm.items.collectAsStateWithLifecycle()
@@ -98,6 +99,27 @@ fun ReviewScreen(
 
             if (logCount >= 20) {
                 item { ScheduleFitCard(ui, logCount, vm) }
+            }
+
+            item {
+                Card(
+                    Modifier.fillMaxWidth().clickable(onClick = onLevelTest),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    ),
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("수준 측정", fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "단어 50개를 보고 아는지 답하면 어휘 규모가 나옵니다. 3분이면 " +
+                                "되고, 받아쓰기를 몇 주 쌓지 않아도 첫날부터 자료를 고를 수 " +
+                                "있습니다. 영어에 없는 단어를 섞어 과잉 응답을 빼기 때문에 " +
+                                "그냥 물어보는 것과 다릅니다.",
+                            fontSize = 12.sp,
+                        )
+                    }
+                }
             }
 
             item {

@@ -8,6 +8,7 @@ import com.englus.app.data.TranscriptState
 import com.englus.app.data.VocabState
 import com.englus.app.feed.Http
 import com.englus.app.gemini.GeminiSettings
+import com.englus.app.level.LevelStore
 import com.englus.app.vocab.VocabRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -136,8 +137,15 @@ class LiveRepository(private val context: Context) {
         }
     }
 
-    /** Coarse level from the vocabulary profile; the default is deliberately mid. */
+    /**
+     * The measured level if there is one, otherwise the profile, otherwise mid.
+     *
+     * The test wins because it samples the whole frequency range deliberately,
+     * while the profile only ever sees words that happened to appear in the
+     * material the learner worked through.
+     */
     private suspend fun level(): String {
+        LevelStore(context).cefr?.let { return it.label }
         val estimate = VocabRepository.estimateSize(vocabDao.observeBandStats().first())
             ?: return "B1"
         return when {

@@ -7,6 +7,9 @@ interface WordRanks {
     /** How many words the list holds - the ceiling on any coverage claim. */
     val size: Int
 
+    /** The word at a rank, for sampling a band. Null when the rank is unused. */
+    fun wordAt(rank: Int): String? = null
+
     fun contains(word: String): Boolean = rank(word) != null
 }
 

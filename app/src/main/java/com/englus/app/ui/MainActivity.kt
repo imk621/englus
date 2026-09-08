@@ -41,6 +41,8 @@ import androidx.navigation.navArgument
 import com.englus.app.data.EpisodeKind
 import com.englus.app.ui.dictation.DictationScreen
 import com.englus.app.ui.dictation.DictationViewModel
+import com.englus.app.ui.level.LevelScreen
+import com.englus.app.ui.level.LevelViewModel
 import com.englus.app.ui.library.LibraryScreen
 import com.englus.app.ui.live.LiveScreen
 import com.englus.app.ui.live.LiveViewModel
@@ -233,10 +235,19 @@ private fun Root(sharedText: String? = null) {
                     onStartSession = { nav.navigate("srs") },
                     onSoundDrills = { nav.navigate("sound") },
                     onVocab = { nav.navigate("vocab") },
+                    onLevelTest = { nav.navigate("level") },
                 )
             }
 
             composable("srs") { ReviewSessionScreen(onBack = { nav.popBackStack() }) }
+            composable("level") {
+                val application = app()
+                val vm: LevelViewModel = viewModel(
+                    key = "level",
+                    factory = viewModelFactory { initializer { LevelViewModel(application) } },
+                )
+                LevelScreen(vm = vm, onBack = { nav.popBackStack() })
+            }
             composable("vocab") {
                 val application = app()
                 val vm: VocabViewModel = viewModel(
