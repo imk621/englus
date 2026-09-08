@@ -59,6 +59,18 @@ import androidx.lifecycle.Lifecycle
 import androidx.compose.material3.Switch
 import com.englus.app.widget.SentenceWidget
 import com.englus.app.exposure.ExposureSettings
+import com.englus.app.data.feedsForLevel
+import com.englus.app.level.LevelStore
+import com.englus.app.material.MaterialWorker
+import com.englus.app.material.MaterialSettings
+
+data class MaterialUi(
+    val enabled: Boolean = false,
+    val perDay: Int = 1,
+    val lastFetchAt: Long = 0,
+    val level: String? = null,
+    val feedCount: Int = 0,
+)
 
 data class ExposureUi(
     val enabled: Boolean = true,
@@ -91,6 +103,7 @@ data class SettingsUi(
     val error: String? = null,
     val backup: BackupUi = BackupUi(),
     val exposure: ExposureUi = ExposureUi(),
+    val material: MaterialUi = MaterialUi(),
 )
 
 class SettingsViewModel(app: Application) : AndroidViewModel(app) {
@@ -98,6 +111,8 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     private val explain = (app as EnglusApp).explain
     private val backups = BackupRepository(app)
     private val exposure = ExposureSettings(app)
+    private val material = MaterialSettings(app)
+    private val level = LevelStore(app)
 
     private val _ui = MutableStateFlow(
         SettingsUi(
@@ -142,6 +157,30 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
                 status = exposure.status(),
             )
         )
+    }
+
+    fun refreshMaterial() = _ui.update {
+        val cefr = level.cefr?.label
+        it.copy(
+            material = MaterialUi(
+                enabled = material.enabled,
+                perDay = material.perDay,
+                lastFetchAt = material.lastFetchAt,
+                level = cefr,
+                feedCount = feedsForLevel(cefr).size,
+            )
+        )
+    }
+
+    fun setMaterialEnabled(v: Boolean) {
+        material.enabled = v
+        if (v) MaterialWorker.schedule(getApplication()) else MaterialWorker.cancel(getApplication())
+        refreshMaterial()
+    }
+
+    fun setMaterialPerDay(v: Int) {
+        material.perDay = v
+        refreshMaterial()
     }
 
     fun setExposureEnabled(v: Boolean) {
@@ -418,6 +457,8 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
                 )
             }
 
+            item { MaterialSection(ui.material, vm) }
+
             item { ExposureSection(ui.exposure, vm) }
 
             item { BackupSection(ui.backup, vm) }
@@ -688,3 +729,78 @@ private fun ExposureSection(exposure: ExposureUi, vm: SettingsViewModel) {
 }
 
 private fun ExposureUi.status(): String = status
+
+/**
+ * Letting the app go and find material by itself.
+ *
+ * Before this, every session began with the learner deciding what to listen to
+ * and then waiting for it - subscribe, refresh, pick, download, transcribe. A
+ * habit does not survive five steps standing in front of it.
+ */
+@Composable
+private fun MaterialSection(material: MaterialUi, vm: SettingsViewModel) {
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refreshMaterial() }
+
+    Column(Modifier.padding(top = 10.dp)) {
+        Text("자동 자료 수급", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "하루에 한 편씩, 내 수준에 맞는 무료 팟캐스트에서 새 에피소드를 " +
+                "무작위로 받아 전사까지 마쳐 둡니다. 같은 자료만 돌면 입력이 아니라 " +
+                "가구가 되기 때문에 무작위입니다.",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("자동으로 받기", fontSize = 14.sp)
+                Text(
+                    if (material.level == null) {
+                        "수준을 아직 재지 않아 초급·중급에서 받습니다"
+                    } else {
+                        "${material.level} 기준 · 대상 피드 ${material.feedCount}개"
+                    },
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = material.enabled, onCheckedChange = vm::setMaterialEnabled)
+        }
+
+        if (material.enabled) {
+            Spacer(Modifier.height(10.dp))
+            Text("하루에", fontSize = 12.sp)
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(1, 2, 3).forEach { n ->
+                    FilterChip(
+                        selected = material.perDay == n,
+                        onClick = { vm.setMaterialPerDay(n) },
+                        label = { Text("${n}편", fontSize = 11.sp) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            // Said plainly, because these are the learner's resources being spent.
+            Text(
+                "Wi-Fi 에 연결되고 충전 중일 때만 받습니다. 한 편이 수십 MB 이고 " +
+                    "전사에 몇 분간 CPU 를 쓰기 때문에, 데이터나 배터리로 할 일이 " +
+                    "아닙니다. 어차피 자료는 내일 들을 것입니다.",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (material.lastFetchAt > 0) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "마지막 수급: " + java.text.SimpleDateFormat(
+                        "M월 d일 HH:mm", java.util.Locale.KOREA
+                    ).format(java.util.Date(material.lastFetchAt)),
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}

@@ -8,6 +8,8 @@ import com.englus.app.gemini.ExplainRepository
 import com.englus.app.gemini.ExamRepository
 import com.englus.app.gemini.WritingRepository
 import com.englus.app.ocr.ReadingRepository
+import com.englus.app.material.MaterialSettings
+import com.englus.app.material.MaterialWorker
 import com.englus.app.srs.ReminderWorker
 import com.englus.app.srs.SrsRepository
 import com.englus.app.live.LiveRepository
@@ -33,5 +35,7 @@ class EnglusApp : Application() {
     override fun onCreate() {
         super.onCreate()
         ReminderWorker.schedule(this)
+        // Only when asked for: it spends data and battery unprompted.
+        if (MaterialSettings(this).enabled) MaterialWorker.schedule(this)
     }
 }

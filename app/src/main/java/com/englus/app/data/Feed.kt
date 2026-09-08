@@ -66,6 +66,20 @@ class FeedConverters {
 /** Starter feeds, ordered as a difficulty ladder. */
 data class PresetFeed(val title: String, val level: String, val feedUrl: String)
 
+/**
+ * The pool automatic fetching draws from.
+ *
+ * Every URL here was checked to be live and to actually contain items - VOA's
+ * zone ids in particular are not guessable, and three of the four ids tried
+ * first returned an empty feed that would have looked like a working
+ * subscription with nothing in it.
+ *
+ * All of them are free, published for listeners rather than scraped, and the
+ * learner-oriented ones come with transcripts. "Random English from the
+ * internet" is not really available: arbitrary audio has no transcript, no known
+ * difficulty, and no clear right to redistribute. A rotating pull from a pool of
+ * level-tagged sources is the version of that idea which actually works.
+ */
 val PRESET_FEEDS = listOf(
     PresetFeed(
         "VOA Learning English · As It Is", "초급",
@@ -76,6 +90,10 @@ val PRESET_FEEDS = listOf(
         "https://learningenglish.voanews.com/podcast/?count=20&zoneId=1581",
     ),
     PresetFeed(
+        "VOA Learning English · Science & Technology", "중급",
+        "https://learningenglish.voanews.com/podcast/?count=20&zoneId=1579",
+    ),
+    PresetFeed(
         "BBC · 6 Minute English", "중급",
         "https://podcasts.files.bbci.co.uk/p02pc9tn.rss",
     ),
@@ -83,4 +101,36 @@ val PRESET_FEEDS = listOf(
         "NPR · Planet Money", "고급",
         "https://feeds.npr.org/510289/podcast.xml",
     ),
+    PresetFeed(
+        "NPR · Short Wave", "고급",
+        "https://feeds.npr.org/510351/podcast.xml",
+    ),
+    PresetFeed(
+        "NPR · TED Radio Hour", "고급",
+        "https://feeds.npr.org/510298/podcast.xml",
+    ),
+    PresetFeed(
+        "NPR · Up First", "고급",
+        "https://feeds.npr.org/510318/podcast.xml",
+    ),
 )
+
+/**
+ * Which feeds suit a level.
+ *
+ * Deliberately overlapping: a learner sitting on a boundary should get material
+ * from both sides rather than a single narrow band, and the unknown-word rate
+ * measured after transcription is what actually decides whether an episode was
+ * a good pick.
+ */
+fun feedsForLevel(cefr: String?): List<PresetFeed> {
+    val wanted = when (cefr) {
+        "A2" -> setOf("초급")
+        "B1" -> setOf("초급", "중급")
+        "B2" -> setOf("중급")
+        "C1" -> setOf("중급", "고급")
+        "C2" -> setOf("고급")
+        else -> setOf("초급", "중급")
+    }
+    return PRESET_FEEDS.filter { it.level in wanted }
+}

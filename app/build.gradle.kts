@@ -115,6 +115,9 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.room:room-testing:2.6.1")
+    // Runs a worker directly so its constraints (unmetered, charging) do not
+    // have to be satisfied to test what it actually does.
+    androidTestImplementation("androidx.work:work-testing:2.9.1")
 }
 
 ksp {
