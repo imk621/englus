@@ -7,6 +7,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -74,14 +75,19 @@ import com.englus.app.ui.vocab.VocabScreen
 import com.englus.app.ui.vocab.VocabViewModel
 import com.englus.app.ui.vocab.WordScreen
 import com.englus.app.ui.vocab.WordViewModel
+import com.englus.app.ui.theme.EnglusTheme
 import com.englus.app.ui.writing.WritingScreen
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Since targetSdk 35 the system draws edge-to-edge regardless. This
+        // also picks status-bar icon colours that contrast with the theme;
+        // without it the icons were white on a white top bar.
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val shared = sharedText(intent)
-        setContent { MaterialTheme { Root(sharedText = shared) } }
+        setContent { EnglusTheme { Root(sharedText = shared) } }
     }
 
     /**
