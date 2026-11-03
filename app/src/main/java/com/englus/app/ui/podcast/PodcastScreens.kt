@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
@@ -60,7 +60,7 @@ fun SubscriptionsScreen(
             TopAppBar(
                 title = { Text("팟캐스트") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "뒤로") }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") }
                 },
             )
         },
@@ -162,7 +162,7 @@ fun PodcastScreen(vm: PodcastViewModel, onBack: () -> Unit) {
             TopAppBar(
                 title = { Text(podcast?.title ?: "", maxLines = 1) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "뒤로") }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") }
                 },
                 actions = {
                     IconButton(onClick = { vm.refresh() }) { Icon(Icons.Default.Refresh, "새로고침") }

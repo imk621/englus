@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -67,7 +67,7 @@ fun WritingScreen(
                 navigationIcon = {
                     // A tab root has nowhere to go back to.
                     if (showBack) {
-                        IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "뒤로") }
+                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") }
                     }
                 },
             )

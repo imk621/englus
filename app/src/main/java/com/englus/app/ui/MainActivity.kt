@@ -13,7 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Headphones
-import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -121,7 +121,7 @@ private enum class Tab(val route: String, val label: String, val icon: ImageVect
      * inside it, not the thing the tab is for.
      */
     SPEAKING("tab/speaking", "말하기", Icons.Default.Mic),
-    READING("tab/reading", "읽기", Icons.Default.MenuBook),
+    READING("tab/reading", "읽기", Icons.AutoMirrored.Filled.MenuBook),
     WRITING("tab/writing", "쓰기", Icons.Default.EditNote),
     REVIEW("tab/review", "복습", Icons.Default.Bookmarks),
 }

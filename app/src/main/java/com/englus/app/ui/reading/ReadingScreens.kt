@@ -18,7 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -97,7 +97,7 @@ fun ReadingCaptureScreen(
             TopAppBar(
                 title = { Text("읽기 추가") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "뒤로") }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") }
                 },
             )
         },
@@ -177,7 +177,7 @@ fun ReaderScreen(vm: ReaderViewModel, onBack: () -> Unit, onOpenSettings: () -> 
             TopAppBar(
                 title = { Text(episode?.title ?: "", maxLines = 1) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "뒤로") }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") }
                 },
                 actions = {
                     TextButton(onClick = { vm.toggleAllTranslations() }) {

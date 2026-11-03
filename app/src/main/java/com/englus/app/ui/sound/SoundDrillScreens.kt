@@ -18,7 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.SlowMotionVideo
 import androidx.compose.material3.Button
@@ -61,7 +61,7 @@ fun SoundPatternListScreen(
             TopAppBar(
                 title = { Text("소리 패턴 훈련") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "뒤로") }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") }
                 },
             )
         },
@@ -137,7 +137,7 @@ fun SoundDrillScreen(vm: SoundDrillViewModel, onBack: () -> Unit) {
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "뒤로") }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") }
                 },
             )
         },
