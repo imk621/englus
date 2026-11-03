@@ -81,9 +81,7 @@ object OnDeviceGemini : TextModel {
         if (refresh() != Status.AVAILABLE) {
             throw AiException("기기 안 모델(Gemini Nano)을 쓸 수 없습니다: ${_status.value.label}")
         }
-        val prompt = request.schema
-            ?.let { request.prompt.trimEnd() + "\n\n" + JsonText.instruction(it) }
-            ?: request.prompt
+        val prompt = JsonText.onDevicePrompt(request.prompt, request.schema)
 
         val reply = runCatching { run(prompt, request, request.maxOutputTokens) }
             // Nano's output cap is lower than the cloud's and differs by device.

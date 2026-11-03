@@ -54,7 +54,7 @@ class ExamRepository(context: Context) {
         val picked = pickSpread(usable, count)
         val result = router.generate(
             AiTask.EXAM,
-            TextRequest(buildPrompt(picked), SCHEMA, temperature = 0.4f, maxOutputTokens = 4096),
+            TextRequest(buildPrompt(picked.map { it.text }), SCHEMA, temperature = 0.4f, maxOutputTokens = 4096),
         )
         val generated = parse(result.text)
         if (generated.isEmpty()) throw ExamException("문제를 생성하지 못했습니다.")
@@ -102,24 +102,6 @@ class ExamRepository(context: Context) {
         dao.updateSession(s.copy(finished = true, correct = correct, elapsedMs = elapsedMs))
     }
 
-    private fun buildPrompt(sentences: List<Sentence>): String = buildString {
-        appendLine("한국인 영어 학습자를 위한 듣기 문제를 만들어라. 4지선다다.")
-        appendLine()
-        appendLine("아래는 학습자가 듣고 있는 팟캐스트의 문장들이다. 각 문장에 번호가 붙어 있다.")
-        appendLine("문장마다 문제를 하나씩 만들되, 종류를 섞어라:")
-        appendLine("- HEARD: 실제로 무엇이라고 말했는지 고르는 문제. options 는 영어 문장 4개.")
-        appendLine("  정답은 원문 그대로. 나머지 셋은 **실제로 잘못 들릴 법한** 문장이어야 한다 —")
-        appendLine("  축약·연음·약형 때문에 헷갈리는 형태로 만들어라. 무관한 문장은 문제가 되지 않는다.")
-        appendLine("- MEANING: 그 문장의 내용을 묻는 문제. prompt 는 한국어 질문, options 는 한국어 4개.")
-        appendLine()
-        appendLine("규칙:")
-        appendLine("- sentenceIndex 는 아래 번호를 그대로 쓴다.")
-        appendLine("- correctIndex 는 0부터 시작한다.")
-        appendLine("- explanation 은 왜 그 답인지, 그리고 오답이 왜 헷갈리는지 한국어로 한두 문장.")
-        appendLine("- HEARD 문제의 prompt 는 빈 문자열로 둬라. 오디오 자체가 질문이다.")
-        appendLine()
-        sentences.forEachIndexed { i, s -> appendLine("[$i] ${s.text}") }
-    }
 
     private data class Generated(
         val sentenceIndex: Int,
@@ -154,7 +136,27 @@ class ExamRepository(context: Context) {
         }
     }
 
-    private companion object {
+    internal companion object {
+        /** The exact prompt text; `tools/hosteval` replays it on the PC GPU. */
+        internal fun buildPrompt(texts: List<String>): String = buildString {
+            appendLine("한국인 영어 학습자를 위한 듣기 문제를 만들어라. 4지선다다.")
+            appendLine()
+            appendLine("아래는 학습자가 듣고 있는 팟캐스트의 문장들이다. 각 문장에 번호가 붙어 있다.")
+            appendLine("문장마다 문제를 하나씩 만들되, 종류를 섞어라:")
+            appendLine("- HEARD: 실제로 무엇이라고 말했는지 고르는 문제. options 는 영어 문장 4개.")
+            appendLine("  정답은 원문 그대로. 나머지 셋은 **실제로 잘못 들릴 법한** 문장이어야 한다 —")
+            appendLine("  축약·연음·약형 때문에 헷갈리는 형태로 만들어라. 무관한 문장은 문제가 되지 않는다.")
+            appendLine("- MEANING: 그 문장의 내용을 묻는 문제. prompt 는 한국어 질문, options 는 한국어 4개.")
+            appendLine()
+            appendLine("규칙:")
+            appendLine("- sentenceIndex 는 아래 번호를 그대로 쓴다.")
+            appendLine("- correctIndex 는 0부터 시작한다.")
+            appendLine("- explanation 은 왜 그 답인지, 그리고 오답이 왜 헷갈리는지 한국어로 한두 문장.")
+            appendLine("- HEARD 문제의 prompt 는 빈 문자열로 둬라. 오디오 자체가 질문이다.")
+            appendLine()
+            texts.forEachIndexed { i, t -> appendLine("[$i] $t") }
+        }
+
 
         val SCHEMA: JSONObject = JSONObject("""
             {

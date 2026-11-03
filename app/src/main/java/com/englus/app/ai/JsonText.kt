@@ -26,6 +26,13 @@ object JsonText {
         append(skeleton(schema).toString())
     }
 
+    /**
+     * The full text sent to Gemini Nano. `tools/hosteval` dumps this exact
+     * string so the PC replays what the phone would see, not a copy of it.
+     */
+    fun onDevicePrompt(prompt: String, schema: JSONObject?): String =
+        if (schema == null) prompt else prompt.trimEnd() + "\n\n" + instruction(schema)
+
     /** A sample value of the schema's shape, with placeholder leaves. */
     fun skeleton(schema: JSONObject): Any = when (schema.optString("type").uppercase()) {
         "OBJECT" -> {

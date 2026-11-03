@@ -289,14 +289,14 @@ RSS는 원래 배포용 공개 규격이라 다운로드가 정상 사용이고,
 | 사용자 발화 전사 (쉐도잉) | **Moonshine / Whisper base** | — |
 | 실시간 회화 | 불가 | **Gemini Live API** |
 | 문법 교정 | **ML Kit GenAI Proofreading** (Gemini Nano, S25 지원) | Gemini 2.5 Flash |
-| 문법 *설명* (한국어) | 불가 (Nano는 태스크 API라 자유 프롬프트 불가) | **Gemini 2.5 Flash** |
+| 문장 *설명* · 영작 첨삭 · 작문 주제 · 오늘의 문장 | **Gemini Nano — ML Kit GenAI Prompt API** (2026-11, 자유 프롬프트 가능) | Gemini Flash (폴백) |
 | 번역 | **ML Kit Translation** (오프라인) | Gemini (뉘앙스) |
 | 요약 | **ML Kit GenAI Summarization** | Gemini Flash |
 | OCR | **ML Kit Text Recognition v2** | Gemini Flash vision (손글씨/표) |
 | TTS | **Android TextToSpeech** | Gemini TTS (고품질 필요 시) |
-| 문제·클로즈 생성 | Gemma 3n (MediaPipe) — 오프라인 대비 | **Gemini 2.5 Flash** |
+| 듣기 시험 생성 | Gemini Nano (키가 없을 때만) | **Gemini Flash** (오답 품질 때문에 우선) |
 
-**설계 규칙:** 모든 AI 호출은 `AiRouter` 하나를 통과한다. `OnDeviceProvider` / `GeminiProvider` / `CachedProvider` 구현체를 네트워크·설정·쿼터에 따라 런타임 선택. 앱 코드는 어디서 실행되는지 몰라야 한다.
+**설계 규칙 (2026-11 구현됨, `app/.../ai/`):** 생성 AI 호출은 `AiRouter` 하나를 통과한다. `OnDeviceProvider` / `GeminiProvider` / `CachedProvider` 구현체를 네트워크·설정·쿼터에 따라 런타임 선택. 앱 코드는 어디서 실행되는지 몰라야 한다.
 
 ### 기술 스택
 Kotlin + Jetpack Compose / Room + DataStore / Hilt / Coroutines·Flow / **WorkManager (전사 큐)** / **Media3 ExoPlayer (재생·구간반복)** / AudioRecord (녹음) / **ONNX Runtime Android (+QNN EP)** 또는 whisper.cpp JNI / CameraX (Phase 3) / Ktor + Google GenAI SDK

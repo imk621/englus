@@ -65,25 +65,6 @@ class WritingClient(private val router: AiRouter) {
         return result.text.trim().ifBlank { throw AiException("주제를 받지 못했습니다.") }
     }
 
-    private fun buildPrompt(prompt: String, text: String): String = buildString {
-        appendLine("너는 한국인 영어 학습자의 영작문을 첨삭하는 교사다.")
-        appendLine("설명은 모두 한국어로, 교정문은 영어로 쓴다.")
-        appendLine()
-        appendLine("규칙:")
-        appendLine("- corrected: 학습자가 쓴 문장을 최소한으로 고친 것. 문체를 바꾸지 말고")
-        appendLine("  틀린 부분만 고쳐라. 무엇이 틀렸는지 보이는 것이 목적이다.")
-        appendLine("- natural: 원어민이라면 실제로 이렇게 쓸 문장. corrected 와 달라도 좋다.")
-        appendLine("- mistakes: 실제로 고친 것만. 취향 차이는 넣지 마라. category 는")
-        appendLine("  ${MistakeCategory.entries.joinToString(", ") { it.name }} 중 하나.")
-        appendLine("- explanation: 왜 틀렸는지 규칙을 한국어로 한두 문장. '어색하다'로 끝내지 마라.")
-        appendLine("- 틀린 곳이 없으면 mistakes 를 빈 배열로 두고 corrected 는 원문 그대로 둬라.")
-        appendLine("- overall: 잘한 점 하나와 다음에 신경 쓸 점 하나. 한국어 두세 문장.")
-        appendLine()
-        if (prompt.isNotBlank()) appendLine("[주제] $prompt")
-        appendLine("[학습자가 쓴 글]")
-        appendLine(text)
-    }
-
     private fun parseCorrection(raw: String): Correction {
         val o = runCatching { JSONObject(raw) }
             .getOrElse { throw AiException("응답을 해석할 수 없습니다.") }
@@ -105,7 +86,27 @@ class WritingClient(private val router: AiRouter) {
         )
     }
 
-    private companion object {
+    internal companion object {
+        /** The exact prompt text; `tools/hosteval` replays it on the PC GPU. */
+        internal fun buildPrompt(prompt: String, text: String): String = buildString {
+            appendLine("너는 한국인 영어 학습자의 영작문을 첨삭하는 교사다.")
+            appendLine("설명은 모두 한국어로, 교정문은 영어로 쓴다.")
+            appendLine()
+            appendLine("규칙:")
+            appendLine("- corrected: 학습자가 쓴 문장을 최소한으로 고친 것. 문체를 바꾸지 말고")
+            appendLine("  틀린 부분만 고쳐라. 무엇이 틀렸는지 보이는 것이 목적이다.")
+            appendLine("- natural: 원어민이라면 실제로 이렇게 쓸 문장. corrected 와 달라도 좋다.")
+            appendLine("- mistakes: 실제로 고친 것만. 취향 차이는 넣지 마라. category 는")
+            appendLine("  ${MistakeCategory.entries.joinToString(", ") { it.name }} 중 하나.")
+            appendLine("- explanation: 왜 틀렸는지 규칙을 한국어로 한두 문장. '어색하다'로 끝내지 마라.")
+            appendLine("- 틀린 곳이 없으면 mistakes 를 빈 배열로 두고 corrected 는 원문 그대로 둬라.")
+            appendLine("- overall: 잘한 점 하나와 다음에 신경 쓸 점 하나. 한국어 두세 문장.")
+            appendLine()
+            if (prompt.isNotBlank()) appendLine("[주제] $prompt")
+            appendLine("[학습자가 쓴 글]")
+            appendLine(text)
+        }
+
         val CORRECTION_SCHEMA: JSONObject = JSONObject("""
             {
               "type": "OBJECT",

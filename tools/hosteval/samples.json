@@ -1,0 +1,29 @@
+{
+  "_comment": "Inputs for tools/hosteval. Sentences are written for this file (no third-party transcripts). Each one targets a known weak spot: sentence type, reduced speech, phrasal verbs, learner errors.",
+  "explain": [
+    {"id": "imperative", "before": "We have a lot of ground to cover today.", "target": "Don't ask what the market can do for you; ask what you can do for the market.", "after": "That's the whole idea behind this episode.", "diagnosis": "VOCAB"},
+    {"id": "reduced-gonna", "before": "So the plan changed last minute.", "target": "I'm gonna have to get back to you on that one.", "after": "Let me check with the team first.", "diagnosis": "SOUND"},
+    {"id": "flap-t", "before": "", "target": "What do you wanna do about it, though?", "after": "Because we can't just sit here.", "diagnosis": "SOUND"},
+    {"id": "rhetorical", "before": "Prices went up three times this year.", "target": "And who do you think ends up paying for that?", "after": "You do, every time you go shopping.", "diagnosis": "CORRECT"},
+    {"id": "phrasal", "before": "The meeting dragged on for hours.", "target": "By the end, nobody could figure out what we'd actually signed up for.", "after": "", "diagnosis": "VOCAB"},
+    {"id": "fast-chunk", "before": "", "target": "It's not that I don't want to, it's that I can't afford to right now.", "after": "Maybe next year.", "diagnosis": "SPEED"},
+    {"id": "inversion", "before": "Everyone said the bridge was safe.", "target": "Never before had the city seen a failure on that scale.", "after": "It changed how inspections were done.", "diagnosis": null},
+    {"id": "numbers", "before": "Here's the surprising part.", "target": "They raised forty-six thousand dollars in under three weeks.", "after": "Mostly from people who'd never donated before.", "diagnosis": "SOUND"}
+  ],
+  "writing": [
+    {"id": "articles", "prompt": "주말에 한 일", "text": "Last weekend I went to the park with my friend. We eat a lunch on bench and talked about the our job."},
+    {"id": "tense", "prompt": "요즘 배우고 있는 것", "text": "I am learning English since two years. Every morning I listen podcast when I go to the work."},
+    {"id": "preposition", "prompt": "좋아하는 장소", "text": "My favorite place is a small cafe at my neighborhood. I usually go there in Sunday and read books during three hours."},
+    {"id": "clean", "prompt": "오늘의 계획", "text": "Today I plan to finish my report and then go for a run before dinner."},
+    {"id": "word-choice", "prompt": "최근에 본 영화", "text": "The movie was very funny so I was boring at the end. The actor did a great acting."},
+    {"id": "long", "prompt": "회사에서 있었던 일", "text": "Yesterday my manager said me that the project is delayed. I was very surprise because we worked hardly for it. I think the problem is not our team but the schedule was too tight from the begin."}
+  ],
+  "exam": [
+    {"id": "podcast-a", "sentences": [
+      "I'm gonna have to get back to you on that one.",
+      "They raised forty-six thousand dollars in under three weeks.",
+      "It's not that I don't want to, it's that I can't afford to right now.",
+      "By the end, nobody could figure out what we'd actually signed up for."
+    ]}
+  ]
+}
