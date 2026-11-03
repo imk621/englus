@@ -1,9 +1,10 @@
 package com.englus.app.gemini
 
 import com.englus.app.data.Diagnosis
-import com.englus.app.feed.Http
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.englus.app.ai.AiException
+import com.englus.app.ai.AiRouter
+import com.englus.app.ai.AiTask
+import com.englus.app.ai.TextRequest
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -25,54 +26,23 @@ data class Explanation(
  * exactly where a learner needs help, so it is worth a network call and an API
  * key, but only for sentences the learner asks about.
  */
-class GeminiClient(private val settings: GeminiSettings) {
-
-    class GeminiException(message: String) : Exception(message)
-
-    /** Model ids change every few weeks; ask the API rather than guessing. */
-    suspend fun listModels(): List<String> = withContext(Dispatchers.IO) {
-        val key = requireKey()
-        val body = Http.getText("$BASE/models?key=$key")
-        val models = JSONObject(body).optJSONArray("models") ?: JSONArray()
-
-        (0 until models.length()).mapNotNull { i ->
-            val m = models.getJSONObject(i)
-            val methods = m.optJSONArray("supportedGenerationMethods")
-            val supported = (0 until (methods?.length() ?: 0))
-                .any { methods!!.getString(it) == "generateContent" }
-            if (!supported) return@mapNotNull null
-            m.optString("name").removePrefix("models/").takeIf { it.isNotBlank() }
-        }.sorted()
-    }
+class GeminiClient(private val router: AiRouter) {
 
     suspend fun explain(
         target: String,
         before: String?,
         after: String?,
         diagnosis: Diagnosis?,
-    ): Explanation = withContext(Dispatchers.IO) {
-        val key = requireKey()
-        val model = settings.model
-
-        val payload = JSONObject().apply {
-            put("contents", JSONArray().put(
-                JSONObject().put("parts", JSONArray().put(
-                    JSONObject().put("text", buildPrompt(target, before, after, diagnosis))
-                ))
-            ))
-            put("generationConfig", JSONObject().apply {
-                put("responseMimeType", "application/json")
-                put("responseSchema", RESPONSE_SCHEMA)
-                put("temperature", 0.2)
-            })
-        }.toString()
-
-        val raw = Http.postJson("$BASE/models/$model:generateContent?key=$key", payload)
-        parse(raw)
-    }
-
-    private fun requireKey(): String = settings.apiKey.ifBlank {
-        throw GeminiException("Gemini API 키가 설정되지 않았습니다.")
+    ): Pair<Explanation, String> {
+        val result = router.generate(
+            AiTask.EXPLAIN,
+            TextRequest(
+                prompt = buildPrompt(target, before, after, diagnosis),
+                schema = RESPONSE_SCHEMA,
+                temperature = 0.2f,
+            ),
+        )
+        return parse(result.text) to result.modelId
     }
 
     private fun buildPrompt(
@@ -112,26 +82,9 @@ class GeminiClient(private val settings: GeminiSettings) {
         after?.takeIf { it.isNotBlank() }?.let { appendLine("[뒤 문장] $it") }
     }
 
-    private fun parse(raw: String): Explanation {
-        val root = JSONObject(raw)
-        root.optJSONObject("error")?.let {
-            throw GeminiException(it.optString("message", "알 수 없는 오류"))
-        }
-
-        val candidates = root.optJSONArray("candidates")
-            ?: throw GeminiException("응답에 candidates 가 없습니다: ${raw.take(200)}")
-        if (candidates.length() == 0) throw GeminiException("모델이 빈 응답을 반환했습니다.")
-
-        val text = candidates.getJSONObject(0)
-            .optJSONObject("content")
-            ?.optJSONArray("parts")
-            ?.let { parts ->
-                (0 until parts.length()).joinToString("") { parts.getJSONObject(it).optString("text") }
-            }
-            ?: throw GeminiException("응답 본문을 찾을 수 없습니다.")
-
+    private fun parse(text: String): Explanation {
         val o = runCatching { JSONObject(text) }
-            .getOrElse { throw GeminiException("JSON 파싱 실패: ${text.take(200)}") }
+            .getOrElse { throw AiException("JSON 파싱 실패: ${text.take(200)}") }
 
         val exprArray = o.optJSONArray("expressions") ?: JSONArray()
         return Explanation(
@@ -147,8 +100,6 @@ class GeminiClient(private val settings: GeminiSettings) {
     }
 
     private companion object {
-        const val BASE = "https://generativelanguage.googleapis.com/v1beta"
-
         val RESPONSE_SCHEMA: JSONObject = JSONObject("""
             {
               "type": "OBJECT",

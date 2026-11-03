@@ -1,6 +1,11 @@
 package com.englus.app
 
 import android.app.Application
+import com.englus.app.ai.OnDeviceGemini
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import com.englus.app.asr.ModelStore
 import com.englus.app.daily.DailyRepository
 import com.englus.app.daily.DailyWorker
@@ -41,6 +46,10 @@ class EnglusApp : Application() {
         // Only when asked for: it spends data and battery unprompted.
         if (MaterialSettings(this).enabled) MaterialWorker.schedule(this)
         // Only once a key exists; without one it would retry every day forever.
-        if (daily.configured) DailyWorker.schedule(this)
+        if (daily.cloudConfigured) DailyWorker.schedule(this)
+        // Screens read the on-device status synchronously; learn it once up front.
+        appScope.launch { OnDeviceGemini.refresh() }
     }
+
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 }

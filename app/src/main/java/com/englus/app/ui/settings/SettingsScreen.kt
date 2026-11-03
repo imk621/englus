@@ -1,5 +1,8 @@
 package com.englus.app.ui.settings
 
+import com.englus.app.ai.AiEngine
+import com.englus.app.ai.OnDeviceGemini
+import com.google.mlkit.genai.common.DownloadStatus
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
@@ -105,6 +108,11 @@ data class SettingsUi(
     val backup: BackupUi = BackupUi(),
     val exposure: ExposureUi = ExposureUi(),
     val material: MaterialUi = MaterialUi(),
+    val engine: AiEngine = AiEngine.AUTO,
+    val nano: OnDeviceGemini.Status = OnDeviceGemini.Status.UNKNOWN,
+    /** Bytes so far while AICore downloads Nano; null when not downloading. */
+    val nanoDownloaded: Long? = null,
+    val nanoError: String? = null,
 )
 
 class SettingsViewModel(app: Application) : AndroidViewModel(app) {
@@ -121,9 +129,51 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
             model = explain.settings.model,
             liveModel = explain.settings.liveModel,
             savedKey = explain.settings.configured,
+            engine = explain.settings.engine,
         )
     )
     val ui: StateFlow<SettingsUi> = _ui.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            OnDeviceGemini.status.collect { s -> _ui.update { it.copy(nano = s) } }
+        }
+        viewModelScope.launch { OnDeviceGemini.refresh() }
+    }
+
+    fun setEngine(e: AiEngine) {
+        explain.settings.engine = e
+        _ui.update { it.copy(engine = e) }
+    }
+
+    fun checkNano() {
+        viewModelScope.launch {
+            _ui.update { it.copy(nanoError = null) }
+            OnDeviceGemini.refresh()
+        }
+    }
+
+    /** Nano is a system download handled by AICore; this only asks for it and shows progress. */
+    fun downloadNano() {
+        viewModelScope.launch {
+            _ui.update { it.copy(nanoDownloaded = 0L, nanoError = null) }
+            try {
+                OnDeviceGemini.download().collect { st ->
+                    when (st) {
+                        is DownloadStatus.DownloadProgress ->
+                            _ui.update { it.copy(nanoDownloaded = st.totalBytesDownloaded) }
+                        is DownloadStatus.DownloadFailed ->
+                            _ui.update { it.copy(nanoDownloaded = null, nanoError = st.e.message) }
+                        is DownloadStatus.DownloadCompleted ->
+                            _ui.update { it.copy(nanoDownloaded = null) }
+                        else -> Unit
+                    }
+                }
+            } catch (e: Throwable) {
+                _ui.update { it.copy(nanoDownloaded = null, nanoError = e.message ?: e.toString()) }
+            }
+        }
+    }
 
     fun setKey(v: String) = _ui.update { it.copy(apiKey = v, message = null, error = null) }
 
@@ -341,6 +391,15 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
+                AiEngineSection(
+                    ui = ui,
+                    onEngine = vm::setEngine,
+                    onCheck = vm::checkNano,
+                    onDownload = vm::downloadNano,
+                )
+            }
+
+            item {
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer
@@ -360,7 +419,8 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "문장 설명, 영작 첨삭, 듣기 시험, 실시간 회화에 쓰입니다. " +
+                            "듣기 시험과 실시간 회화, 그리고 기기 안 모델(Gemini Nano)을 " +
+                                "쓸 수 없을 때의 문장 설명·영작 첨삭·오늘의 문장에 쓰입니다. " +
                                 "전사·해석·받아쓰기·복습·어휘는 전부 기기 안에서 처리되므로, " +
                                 "키가 없어도 앱의 중심 기능은 그대로 동작합니다. " +
                                 "이 중 실제로 요금이 나가는 것은 실시간 회화뿐입니다.",

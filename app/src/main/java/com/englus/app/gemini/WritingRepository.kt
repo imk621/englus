@@ -4,16 +4,18 @@ import android.content.Context
 import com.englus.app.data.EnglusDatabase
 import com.englus.app.data.Writing
 import com.englus.app.data.WritingMistake
+import com.englus.app.ai.AiRouter
+import com.englus.app.ai.AiTask
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class WritingRepository(context: Context) {
 
     private val dao = EnglusDatabase.get(context).writings()
-    private val settings = GeminiSettings(context)
-    private val client = WritingClient(settings)
+    private val router = AiRouter(context)
+    private val client = WritingClient(router)
 
-    val configured: Boolean get() = settings.configured
+    val configured: Boolean get() = router.configured(AiTask.WRITING_CORRECTION)
 
     fun observeAll() = dao.observeAll()
     fun observeCount() = dao.observeCount()
@@ -39,7 +41,7 @@ class WritingRepository(context: Context) {
                 correctedText = correction.corrected,
                 naturalText = correction.natural,
                 overall = correction.overall,
-                model = settings.model,
+                model = correction.model,
                 createdAt = System.currentTimeMillis(),
             )
         )

@@ -1,9 +1,10 @@
 package com.englus.app.gemini
 
 import com.englus.app.data.MistakeCategory
-import com.englus.app.feed.Http
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.englus.app.ai.AiException
+import com.englus.app.ai.AiRouter
+import com.englus.app.ai.AiTask
+import com.englus.app.ai.TextRequest
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -12,6 +13,8 @@ data class Correction(
     val natural: String,
     val overall: String,
     val mistakes: List<CorrectionItem>,
+    /** Which model wrote this; stored with the correction. */
+    val model: String = "",
 )
 
 data class CorrectionItem(
@@ -30,37 +33,18 @@ data class CorrectionItem(
  * whichever half the learner needed — either the error is buried in a rewrite,
  * or the rewrite never happens and the sentence stays stiff but "correct".
  */
-class WritingClient(private val settings: GeminiSettings) {
+class WritingClient(private val router: AiRouter) {
 
-    class WritingException(message: String) : Exception(message)
-
-    suspend fun correct(prompt: String, text: String): Correction = withContext(Dispatchers.IO) {
-        val key = settings.apiKey.ifBlank { throw WritingException("Gemini API 키가 필요합니다.") }
-
-        val payload = JSONObject().apply {
-            put("contents", JSONArray().put(
-                JSONObject().put("parts", JSONArray().put(
-                    JSONObject().put("text", buildPrompt(prompt, text))
-                ))
-            ))
-            put("generationConfig", JSONObject().apply {
-                put("responseMimeType", "application/json")
-                put("responseSchema", CORRECTION_SCHEMA)
-                put("temperature", 0.2)
-            })
-        }.toString()
-
-        val raw = Http.postJson(
-            "$BASE/models/${settings.model}:generateContent?key=$key",
-            payload,
+    suspend fun correct(prompt: String, text: String): Correction {
+        val result = router.generate(
+            AiTask.WRITING_CORRECTION,
+            TextRequest(buildPrompt(prompt, text), CORRECTION_SCHEMA, temperature = 0.2f),
         )
-        parseCorrection(raw)
+        return parseCorrection(result.text).copy(model = result.modelId)
     }
 
     /** A topic to write about, when the learner has nothing in mind. */
-    suspend fun suggestPrompt(recentTopics: List<String>): String = withContext(Dispatchers.IO) {
-        val key = settings.apiKey.ifBlank { throw WritingException("Gemini API 키가 필요합니다.") }
-
+    suspend fun suggestPrompt(recentTopics: List<String>): String {
         val instruction = buildString {
             appendLine("한국인 영어 학습자를 위한 영작문 주제를 하나만 제안하라.")
             appendLine("- 5~8문장으로 답할 수 있는 크기여야 한다.")
@@ -74,15 +58,11 @@ class WritingClient(private val settings: GeminiSettings) {
             }
         }
 
-        val payload = JSONObject().apply {
-            put("contents", JSONArray().put(
-                JSONObject().put("parts", JSONArray().put(JSONObject().put("text", instruction)))
-            ))
-            put("generationConfig", JSONObject().put("temperature", 1.0))
-        }.toString()
-
-        val raw = Http.postJson("$BASE/models/${settings.model}:generateContent?key=$key", payload)
-        textOf(raw).trim().ifBlank { throw WritingException("주제를 받지 못했습니다.") }
+        val result = router.generate(
+            AiTask.WRITING_TOPIC,
+            TextRequest(instruction, schema = null, temperature = 1.0f, maxOutputTokens = 200),
+        )
+        return result.text.trim().ifBlank { throw AiException("주제를 받지 못했습니다.") }
     }
 
     private fun buildPrompt(prompt: String, text: String): String = buildString {
@@ -105,8 +85,8 @@ class WritingClient(private val settings: GeminiSettings) {
     }
 
     private fun parseCorrection(raw: String): Correction {
-        val o = runCatching { JSONObject(textOf(raw)) }
-            .getOrElse { throw WritingException("응답을 해석할 수 없습니다.") }
+        val o = runCatching { JSONObject(raw) }
+            .getOrElse { throw AiException("응답을 해석할 수 없습니다.") }
 
         val arr = o.optJSONArray("mistakes") ?: JSONArray()
         return Correction(
@@ -125,22 +105,7 @@ class WritingClient(private val settings: GeminiSettings) {
         )
     }
 
-    private fun textOf(raw: String): String {
-        val root = JSONObject(raw)
-        root.optJSONObject("error")?.let {
-            throw WritingException(it.optString("message", "알 수 없는 오류"))
-        }
-        val candidates = root.optJSONArray("candidates")
-            ?: throw WritingException("응답에 candidates 가 없습니다.")
-        if (candidates.length() == 0) throw WritingException("모델이 빈 응답을 반환했습니다.")
-        val parts = candidates.getJSONObject(0).optJSONObject("content")?.optJSONArray("parts")
-            ?: throw WritingException("응답 본문을 찾을 수 없습니다.")
-        return (0 until parts.length()).joinToString("") { parts.getJSONObject(it).optString("text") }
-    }
-
     private companion object {
-        const val BASE = "https://generativelanguage.googleapis.com/v1beta"
-
         val CORRECTION_SCHEMA: JSONObject = JSONObject("""
             {
               "type": "OBJECT",

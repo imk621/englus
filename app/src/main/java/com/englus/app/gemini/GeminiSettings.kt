@@ -2,6 +2,8 @@ package com.englus.app.gemini
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.englus.app.ai.AiEngine
+import com.englus.app.ai.AiRouter
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
@@ -55,6 +57,12 @@ class GeminiSettings(context: Context) {
 
     val configured: Boolean get() = apiKey.isNotBlank()
 
+    /** Which model answers: see [AiRouter]. Not a secret, but kept beside the key it decides about. */
+    var engine: AiEngine
+        get() = prefs.getString(KEY_ENGINE, null)
+            ?.let { runCatching { AiEngine.valueOf(it) }.getOrNull() } ?: AiEngine.AUTO
+        set(value) = prefs.edit().putString(KEY_ENGINE, value.name).apply()
+
     fun clear() = prefs.edit().clear().apply()
 
     companion object {
@@ -63,5 +71,6 @@ class GeminiSettings(context: Context) {
         private const val KEY_API = "apiKey"
         private const val KEY_MODEL = "model"
         private const val KEY_LIVE_MODEL = "liveModel"
+        private const val KEY_ENGINE = "engine"
     }
 }

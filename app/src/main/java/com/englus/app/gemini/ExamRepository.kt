@@ -6,7 +6,9 @@ import com.englus.app.data.ExamKind
 import com.englus.app.data.ExamQuestion
 import com.englus.app.data.ExamSession
 import com.englus.app.data.Sentence
-import com.englus.app.feed.Http
+import com.englus.app.ai.AiRouter
+import com.englus.app.ai.AiTask
+import com.englus.app.ai.TextRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -25,9 +27,9 @@ class ExamRepository(context: Context) {
 
     private val dao = EnglusDatabase.get(context).exams()
     private val episodes = EnglusDatabase.get(context).episodes()
-    private val settings = GeminiSettings(context)
+    private val router = AiRouter(context)
 
-    val configured: Boolean get() = settings.configured
+    val configured: Boolean get() = router.configured(AiTask.EXAM)
 
     fun observeQuestions(sessionId: Long) = dao.observeQuestions(sessionId)
     fun observeHistory() = dao.observeHistory()
@@ -38,7 +40,6 @@ class ExamRepository(context: Context) {
     class ExamException(message: String) : Exception(message)
 
     suspend fun generate(episodeId: Long, count: Int = 8): Long = withContext(Dispatchers.IO) {
-        val key = settings.apiKey.ifBlank { throw ExamException("Gemini API 키가 필요합니다.") }
         val episode = episodes.get(episodeId) ?: throw ExamException("에피소드를 찾을 수 없습니다.")
 
         // first(), not first { isNotEmpty() }: Room emits the current contents
@@ -51,21 +52,11 @@ class ExamRepository(context: Context) {
         if (usable.size < 3) throw ExamException("문제를 만들 만한 문장이 부족합니다.")
 
         val picked = pickSpread(usable, count)
-        val payload = JSONObject().apply {
-            put("contents", JSONArray().put(
-                JSONObject().put("parts", JSONArray().put(
-                    JSONObject().put("text", buildPrompt(picked))
-                ))
-            ))
-            put("generationConfig", JSONObject().apply {
-                put("responseMimeType", "application/json")
-                put("responseSchema", SCHEMA)
-                put("temperature", 0.4)
-            })
-        }.toString()
-
-        val raw = Http.postJson("$BASE/models/${settings.model}:generateContent?key=$key", payload)
-        val generated = parse(raw)
+        val result = router.generate(
+            AiTask.EXAM,
+            TextRequest(buildPrompt(picked), SCHEMA, temperature = 0.4f, maxOutputTokens = 4096),
+        )
+        val generated = parse(result.text)
         if (generated.isEmpty()) throw ExamException("문제를 생성하지 못했습니다.")
 
         val sessionId = dao.insertSession(
@@ -139,16 +130,7 @@ class ExamRepository(context: Context) {
         val explanation: String,
     )
 
-    private fun parse(raw: String): List<Generated> {
-        val root = JSONObject(raw)
-        root.optJSONObject("error")?.let {
-            throw ExamException(it.optString("message", "알 수 없는 오류"))
-        }
-        val parts = root.optJSONArray("candidates")
-            ?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
-            ?: throw ExamException("응답 본문을 찾을 수 없습니다.")
-        val text = (0 until parts.length()).joinToString("") { parts.getJSONObject(it).optString("text") }
-
+    private fun parse(text: String): List<Generated> {
         val arr = runCatching { JSONObject(text).optJSONArray("questions") }.getOrNull()
             ?: throw ExamException("문제 형식을 해석할 수 없습니다.")
 
@@ -173,7 +155,6 @@ class ExamRepository(context: Context) {
     }
 
     private companion object {
-        const val BASE = "https://generativelanguage.googleapis.com/v1beta"
 
         val SCHEMA: JSONObject = JSONObject("""
             {

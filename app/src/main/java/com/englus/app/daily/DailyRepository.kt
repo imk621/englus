@@ -4,8 +4,9 @@ import android.content.Context
 import com.englus.app.data.DailySentence
 import com.englus.app.data.EnglusDatabase
 import com.englus.app.data.VocabState
-import com.englus.app.feed.Http
-import com.englus.app.gemini.GeminiSettings
+import com.englus.app.ai.AiRouter
+import com.englus.app.ai.AiTask
+import com.englus.app.ai.TextRequest
 import com.englus.app.level.LevelStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -20,9 +21,12 @@ class DailyRepository(private val context: Context) {
     private val dao = db.daily()
     private val vocabDao = db.vocab()
     private val writingDao = db.writings()
-    private val settings = GeminiSettings(context)
+    private val router = AiRouter(context)
 
-    val configured: Boolean get() = settings.configured
+    val configured: Boolean get() = router.configured(AiTask.DAILY)
+
+    /** The background worker can only use the cloud: AICore refuses background inference. */
+    val cloudConfigured: Boolean get() = router.cloudConfigured
 
     class DailyException(message: String) : Exception(message)
 
@@ -44,28 +48,18 @@ class DailyRepository(private val context: Context) {
      */
     suspend fun generateToday(force: Boolean = false): List<DailySentence> =
         withContext(Dispatchers.IO) {
-            val key = settings.apiKey.ifBlank { throw DailyException("Gemini API 키가 필요합니다.") }
             val dateKey = todayKey()
             if (!force) {
                 val existing = dao.forDate(dateKey)
                 if (existing.isNotEmpty()) return@withContext existing
             }
 
-            val payload = JSONObject().apply {
-                put("contents", JSONArray().put(
-                    JSONObject().put("parts", JSONArray().put(
-                        JSONObject().put("text", buildPrompt())
-                    ))
-                ))
-                put("generationConfig", JSONObject()
-                    .put("responseMimeType", "application/json")
-                    .put("responseSchema", SCHEMA)
-                    // High enough that a week does not read like one template.
-                    .put("temperature", 1.0))
-            }.toString()
-
-            val raw = Http.postJson("$BASE/models/${settings.model}:generateContent?key=$key", payload)
-            val generated = parse(raw)
+            val result = router.generate(
+                AiTask.DAILY,
+                // High enough that a week does not read like one template.
+                TextRequest(buildPrompt(), SCHEMA, temperature = 1.0f),
+            )
+            val generated = parse(result.text)
             if (generated.isEmpty()) throw DailyException("문장을 만들지 못했습니다.")
 
             val now = System.currentTimeMillis()
@@ -166,17 +160,7 @@ class DailyRepository(private val context: Context) {
         val note: String,
     )
 
-    private fun parse(raw: String): List<Generated> {
-        val root = JSONObject(raw)
-        root.optJSONObject("error")?.let {
-            throw DailyException(it.optString("message", "알 수 없는 오류"))
-        }
-        val parts = root.optJSONArray("candidates")
-            ?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
-            ?: throw DailyException("응답 본문을 찾을 수 없습니다.")
-        val text = (0 until parts.length()).joinToString("") {
-            parts.getJSONObject(it).optString("text")
-        }
+    private fun parse(text: String): List<Generated> {
         val arr = runCatching { JSONObject(text).optJSONArray("sentences") }.getOrNull()
             ?: throw DailyException("문장 형식을 해석할 수 없습니다.")
 
@@ -196,7 +180,6 @@ class DailyRepository(private val context: Context) {
     }
 
     companion object {
-        private const val BASE = "https://generativelanguage.googleapis.com/v1beta"
 
         /** Three: one to write, one to say, and one spare for the home screen. */
         const val COUNT = 3

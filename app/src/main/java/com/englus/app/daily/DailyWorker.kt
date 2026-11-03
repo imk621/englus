@@ -37,7 +37,7 @@ class DailyWorker(
 
     override suspend fun doWork(): Result {
         val repo = DailyRepository(applicationContext)
-        if (!repo.configured) return Result.success()
+        if (!repo.cloudConfigured) return Result.success()
 
         val sentences = runCatching { repo.generateToday() }.getOrElse {
             // A transient failure is worth one retry; the day is not urgent.

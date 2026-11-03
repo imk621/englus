@@ -90,6 +90,10 @@ dependencies {
     // On-device OCR: free, offline, and fast enough to run on a photo the
     // moment it is taken.
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    // Gemini Nano through AICore. On the S25 this makes explanations,
+    // corrections and daily sentences free and offline; on a phone or emulator
+    // without AICore it reports UNAVAILABLE and the cloud model takes over.
+    implementation("com.google.mlkit:genai-prompt:1.0.0-beta5")
     // Stores the user's Gemini API key behind the Android keystore.
     implementation("androidx.security:security-crypto:1.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.11.0")
