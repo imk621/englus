@@ -125,7 +125,7 @@ class HfBackend:
 
 
 class OllamaBackend:
-    """An ollama server (tools: android-dev/bin/hosteval-ollama). Only useful once it sees the GPU."""
+    """An ollama server (tools: hdd_space/dev_lib/android-dev/bin/hosteval-ollama). Only useful once it sees the GPU."""
 
     def __init__(self, model: str, url: str):
         import urllib.request

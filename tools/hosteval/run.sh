@@ -10,7 +10,7 @@
 # 결과: results/hosteval/<시각>/<모델>.md, .jsonl (gitignore 됨)
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-source /media/user/ssd_space/android-dev/env.sh
+source /media/user/hdd_space/dev_lib/android-dev/env.sh
 
 # CUDA PyTorch + transformers 가 갖춰진 기존 환경과 모델 캐시를 빌려 쓴다.
 PY="${PY:-/media/user/ssd_space/titan_failcase_ai/venv/bin/python}"

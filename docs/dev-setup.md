@@ -21,8 +21,9 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 ./gradlew :app:assembleRelease                   # S25 용 (arm64-v8a 만)
 ```
 
-Ubuntu 개발 PC에서는 JDK·SDK·NDK·에뮬레이터·Gradle 캐시를 모두 `/media/user/ssd_space/android-dev`에 두고,
-`source /media/user/ssd_space/android-dev/env.sh`로 환경을 잡는다. 안내는 그 폴더의 `README.md`에 있다.
+Ubuntu 개발 PC에서는 JDK·SDK·NDK를 HDD `/media/user/hdd_space/dev_lib/android-dev`에, 무작위 I/O가 많은
+에뮬레이터(AVD)·Gradle 캐시를 SSD `/media/user/ssd_space/dev_lib/android-dev`에 둔다.
+`source /media/user/hdd_space/dev_lib/android-dev/env.sh`로 환경을 잡는다. 안내는 HDD 쪽 폴더의 `README.md`에 있다.
 
 ## 에뮬레이터 (S25 대역)
 
